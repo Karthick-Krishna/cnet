@@ -1,0 +1,21 @@
+{
+  "name": "net-b-banking-platform",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "install:all": "npm install && npm --prefix client install && npm --prefix admin install",
+    "dev:client": "npm --prefix client run dev",
+    "dev:admin": "npm --prefix admin run dev",
+    "dev": "npx concurrently -n \"CLIENT:4000,ADMIN:4001\" -c \"bgRed.bold,bgBlue.bold\" \"npm run dev:client\" \"npm run dev:admin\"",
+    "build:client": "npm --prefix client run build",
+    "build:admin": "npm --prefix admin run build",
+    "build": "npm --prefix client run build",
+    "build:all": "npm --prefix client run build && npm --prefix admin run build"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.0"
+  },
+  "dependencies": {
+    "zod": "^4.6.7"
+  }
+}
