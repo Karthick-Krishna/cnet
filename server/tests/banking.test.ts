@@ -201,3 +201,139 @@ describe('Premier Mobile Banking - Core Banking Test Suite', () => {
     expect(res.body.overview.systemHealth).toBe('100% OPERATIONAL');
   });
 });
+
+describe('MeridianNet Corporate Banking - Enterprise Transformation Suite', () => {
+  let initiatorToken: string;
+  let authoriserToken: string;
+  let adminToken: string;
+  let orgGbAccId: string;
+  let createdPaymentId: string;
+
+  beforeAll(async () => {
+    const initRes = await request(app)
+      .post('/api/auth/login')
+      .send({ identifier: 'corp_initiator', password: 'CorpPass@2026' });
+    expect(initRes.status).toBe(200);
+    initiatorToken = initRes.body.accessToken;
+
+    const authRes = await request(app)
+      .post('/api/auth/login')
+      .send({ identifier: 'corp_authoriser', password: 'CorpPass@2026' });
+    expect(authRes.status).toBe(200);
+    authoriserToken = authRes.body.accessToken;
+
+    const admRes = await request(app)
+      .post('/api/auth/login')
+      .send({ identifier: 'super_admin', password: 'Admin@123' });
+    expect(admRes.status).toBe(200);
+    adminToken = admRes.body.accessToken;
+
+    const accRes = await request(app)
+      .get('/api/corporate/accounts?orgId=org-meridian-gb')
+      .set('Authorization', `Bearer ${initiatorToken}`);
+    expect(accRes.status).toBe(200);
+    expect(accRes.body.accounts.length).toBeGreaterThan(0);
+    orgGbAccId = accRes.body.accounts[0].id;
+  });
+
+  it('should support multi-stage username lookup and backend security code login', async () => {
+    const lookupRes = await request(app)
+      .post('/api/auth/lookup')
+      .send({ identifier: 'corp_initiator' });
+    expect(lookupRes.status).toBe(200);
+    expect(lookupRes.body.profile.methods.securityCode).toBe(true);
+
+    const codeGen = await request(app)
+      .post('/api/auth/security-code/generate')
+      .send({ identifier: 'corp_initiator', purpose: 'LOGIN' });
+    expect(codeGen.status).toBe(200);
+    expect(codeGen.body.code).toMatch(/^\d{8}$/);
+
+    const codeLogin = await request(app)
+      .post('/api/auth/login-security-code')
+      .send({ identifier: 'corp_initiator', code: codeGen.body.code });
+    expect(codeLogin.status).toBe(200);
+    expect(codeLogin.body.accessToken).toBeDefined();
+  });
+
+  it('should enforce maker-checker separation and step-up PIN on payment authorisation', async () => {
+    const payRes = await request(app)
+      .post('/api/corporate/payments')
+      .set('Authorization', `Bearer ${initiatorToken}`)
+      .send({
+        orgId: 'org-meridian-gb',
+        category: 'PRIORITY_PAYMENT',
+        debitAccountId: orgGbAccId,
+        beneficiaryName: 'Thames Logistics Partners Ltd',
+        beneficiaryAccount: '200412-99014522',
+        beneficiaryBank: 'Barclays Corporate UK',
+        destinationCountry: 'GB',
+        swiftBic: 'BARCGB22XXX',
+        amount: 450.00,
+        currency: 'GBP',
+        referenceNote: 'Automated Corporate Test Settlement',
+      });
+    expect(payRes.status).toBe(200);
+    createdPaymentId = payRes.body.payment.id;
+
+    // Maker (initiator) cannot approve even with step-up PIN
+    const selfApprove = await request(app)
+      .post('/api/corporate/authorisations/decide')
+      .set('Authorization', `Bearer ${initiatorToken}`)
+      .send({ orgId: 'org-meridian-gb', ids: [createdPaymentId], decision: 'APPROVED', stepUpPin: '123456' });
+    expect(selfApprove.status).toBe(403);
+
+    // Authoriser without step-up PIN gets STEP_UP_REQUIRED
+    const missingPin = await request(app)
+      .post('/api/corporate/authorisations/decide')
+      .set('Authorization', `Bearer ${authoriserToken}`)
+      .send({ orgId: 'org-meridian-gb', ids: [createdPaymentId], decision: 'APPROVED' });
+    expect(missingPin.status).toBe(401);
+    expect(missingPin.body.code).toBe('STEP_UP_REQUIRED');
+
+    // Authoriser with valid step-up PIN succeeds
+    const approved = await request(app)
+      .post('/api/corporate/authorisations/decide')
+      .set('Authorization', `Bearer ${authoriserToken}`)
+      .send({ orgId: 'org-meridian-gb', ids: [createdPaymentId], decision: 'APPROVED', stepUpPin: '123456' });
+    expect(approved.status).toBe(200);
+    expect(approved.body.results[0].status).toBe('COMPLETED');
+  });
+
+  it('should enforce country-gated Remote Deposit Capture rules (disabled in IN, enabled in GB)', async () => {
+    const premierRes = await request(app)
+      .post('/api/auth/login')
+      .send({ identifier: 'premier_user', password: 'Password@123' });
+    const premierToken = premierRes.body.accessToken;
+
+    const inRes = await request(app)
+      .get('/api/corporate/rdc?orgId=org-meridian-in')
+      .set('Authorization', `Bearer ${premierToken}`);
+    expect(inRes.status).toBe(403);
+
+    const gbRes = await request(app)
+      .get('/api/corporate/rdc?orgId=org-meridian-gb')
+      .set('Authorization', `Bearer ${premierToken}`);
+    expect(gbRes.status).toBe(200);
+
+    // Cross-org isolation: corp_initiator cannot access org-meridian-in
+    const crossOrgRes = await request(app)
+      .get('/api/corporate/accounts?orgId=org-meridian-in')
+      .set('Authorization', `Bearer ${initiatorToken}`);
+    expect(crossOrgRes.status).toBe(403);
+  });
+
+  it('should support admin enterprise summary, policy management, and audit logs', async () => {
+    const sumRes = await request(app)
+      .get('/api/admin/enterprise-summary')
+      .set('Authorization', `Bearer ${adminToken}`);
+    expect(sumRes.status).toBe(200);
+    expect(sumRes.body.summary.organisations).toBeGreaterThanOrEqual(3);
+
+    const audRes = await request(app)
+      .get('/api/admin/audit-logs')
+      .set('Authorization', `Bearer ${adminToken}`);
+    expect(audRes.status).toBe(200);
+    expect(audRes.body.logs.length).toBeGreaterThan(0);
+  });
+});

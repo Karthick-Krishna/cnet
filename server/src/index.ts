@@ -3,6 +3,8 @@ import cors from 'cors';
 import dotenv from 'dotenv';
 import { seedDatabase } from './db/seed';
 import { authRouter } from './routes/authRoutes';
+import { corporateAuthRouter } from './routes/corporateAuthRoutes';
+import { corporateRouter } from './routes/corporateRoutes';
 import { accountRouter } from './routes/accountRoutes';
 import { transferRouter } from './routes/transferRoutes';
 import { beneficiaryRouter } from './routes/beneficiaryRoutes';
@@ -47,6 +49,8 @@ seedDatabase();
 
 // Mount Routes
 app.use('/api/auth', authRouter);
+app.use('/api/auth', corporateAuthRouter);
+app.use('/api/corporate', corporateRouter);
 app.use('/api/accounts', accountRouter);
 app.use('/api/transfers', transferRouter);
 app.use('/api/beneficiaries', beneficiaryRouter);

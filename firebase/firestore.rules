@@ -11,7 +11,7 @@ rules_version = '2';
 //   - displayName: string (required, 2-100 chars) - Legal customer full name
 //   - email: string (required, email format, max 100 chars) - Verified email
 //   - phone: string (optional, max 30 chars) - Contact mobile number
-//   - role: string (required, 'customer' | 'admin' | 'superadmin', protected from self-elevation)
+//   - role: string (required, 'customer' | 'admin' | 'superadmin' | corporate roles, protected from self-elevation)
 //   - customerId: string (optional, max 50 chars, immutable by non-admin) - Banking identifier
 //   - accountStatus: string (optional, 'active' | 'suspended' | 'pending', immutable by non-admin)
 //   - kycStatus: string (optional, 'VERIFIED' | 'PENDING' | 'REJECTED')
@@ -141,6 +141,171 @@ rules_version = '2';
 //   - reason: string (required, max 1000 chars)
 //   - createdAt: timestamp / ISO date (required)
 //
+// ---------------------------------------------------------------
+// Corporate Banking Collections (Organisation-Isolated RBAC)
+// ---------------------------------------------------------------
+//
+// Collection: organisations/{orgId}
+// Document ID: Organisation UUID (orgId)
+// Fields:
+//   - id: string (optional, 1-128 chars, immutable)
+//   - name: string (required, 2-150 chars)
+//   - registrationNumber: string (required, 2-50 chars)
+//   - country: string (required, 2-10 chars)
+//   - baseCurrency: string (required, 3-10 chars)
+//   - status: string (required, 'ACTIVE' | 'SUSPENDED')
+//   - isSandbox: bool (required)
+//   - modules: map (required, boolean module flags)
+//   - createdAt: timestamp / ISO date (optional, immutable)
+//   - updatedAt: timestamp / ISO date (optional)
+//
+// Collection: organisationUsers/{membershipId}
+// Document ID: Composite key `{organisationId}_{userId}`
+// Fields:
+//   - id: string (optional, 1-256 chars, immutable)
+//   - membershipId: string (optional, 1-256 chars, immutable)
+//   - organisationId: string (required, 1-128 chars, immutable)
+//   - userId: string (required, 1-128 chars, immutable)
+//   - role: string (required, 'ORG_ADMIN' | 'PAYMENT_INITIATOR' | 'PAYMENT_APPROVER' | 'AUTHORISER' | 'FINANCE_VIEWER' | 'AUDITOR' | 'SUPPORT_ADMIN' | 'USER')
+//   - permissions: list<string> (required, max 25 items, valid permission codes)
+//   - isDefault: bool (optional)
+//   - status: string (optional, 'ACTIVE' | 'SUSPENDED' | 'REVOKED')
+//   - createdAt: timestamp / ISO date (optional, immutable)
+//   - updatedAt: timestamp / ISO date (optional)
+//
+// Collection: paymentInstructions/{paymentId}
+// Document ID: Payment UUID
+// Fields:
+//   - id: string (optional, 1-128 chars, immutable)
+//   - reference: string (required, 2-100 chars, immutable)
+//   - organisationId: string (required, 1-128 chars, immutable)
+//   - initiatorId: string (required, 1-128 chars, immutable)
+//   - initiatorName: string (required, 1-120 chars)
+//   - category: string (required, PaymentCategory enum)
+//   - debitAccountId: string (required, 1-128 chars)
+//   - debitAccountName: string (required, 1-150 chars)
+//   - debitCurrency: string (required, 3-10 chars)
+//   - beneficiaryId: string | null (optional, max 128 chars)
+//   - beneficiaryName: string (required, 1-150 chars)
+//   - beneficiaryAccount: string (required, 2-100 chars)
+//   - beneficiaryBank: string (required, 1-150 chars)
+//   - destinationCountry: string (required, 2-10 chars)
+//   - swiftBic: string | null (optional, max 20 chars)
+//   - iban: string | null (optional, max 50 chars)
+//   - amount: number (required, > 0)
+//   - currency: string (required, 3-10 chars)
+//   - exchangeRate: number | null (optional, > 0)
+//   - convertedAmount: number | null (optional, >= 0)
+//   - chargesBearer: string (required, 'OUR' | 'SHA' | 'BEN')
+//   - chargesAmount: number (required, >= 0)
+//   - paymentPurpose: string (required, 1-50 chars)
+//   - paymentDate: string (required, 4-64 chars)
+//   - referenceNote: string (required, max 500 chars)
+//   - additionalInfo: string | null (optional, max 1000 chars)
+//   - status: string (required, PaymentStatus enum)
+//   - requiredApprovals: int (required, 1-10)
+//   - currentApprovals: int (required, 0-10)
+//   - approvalHistory: list<map> (required, max 20 items)
+//   - timeline: list<map> (required, max 50 items)
+//   - unusualFlags: list<string> (optional, max 20 items)
+//   - expiresAt: timestamp / ISO date | null (optional)
+//   - createdAt: timestamp / ISO date (optional, immutable)
+//   - updatedAt: timestamp / ISO date (optional)
+//
+// Collection: approvalPolicies/{policyId}
+// Document ID: Policy UUID
+// Fields:
+//   - id: string (optional, 1-128 chars, immutable)
+//   - organisationId: string (required, 1-128 chars, immutable)
+//   - name: string (required, 2-120 chars)
+//   - currency: string (required, 3-10 chars)
+//   - minAmount: number (required, >= 0)
+//   - maxAmount: number (required, >= minAmount)
+//   - requiredApprovals: int (required, 1-10)
+//   - makerCheckerEnforced: bool (required)
+//   - requireStepUpAuth: bool (required)
+//   - isActive: bool (required)
+//   - createdAt: timestamp / ISO date (optional, immutable)
+//   - updatedAt: timestamp / ISO date (optional)
+//
+// Collection: tradeTransactions/{tradeId}
+// Document ID: Trade Transaction UUID
+// Fields:
+//   - id: string (optional, 1-128 chars, immutable)
+//   - reference: string (required, 2-100 chars, immutable)
+//   - organisationId: string (required, 1-128 chars, immutable)
+//   - tradeCategory: string (required, 'IMPORT_DC' | 'DC_AMENDMENT' | 'IMPORT_BILL' | 'IMPORT_LOAN' | 'EXPORT_COLLECTION')
+//   - direction: string (required, 'IMPORT' | 'EXPORT')
+//   - counterparty: string (required, 2-200 chars)
+//   - amount: number (required, > 0)
+//   - currency: string (required, 3-10 chars)
+//   - status: string (required, 'AWAITING_AUTHORISATION' | 'IN_PROGRESS' | 'ISSUED' | 'SETTLED' | 'REJECTED')
+//   - pendingAction: string | null (optional, max 200 chars)
+//   - documents: list<map> (required, max 30 items)
+//   - timeline: list<map> (required, max 50 items)
+//   - approvalHistory: list<map> (required, max 20 items)
+//   - createdAt: timestamp / ISO date (optional, immutable)
+//   - updatedAt: timestamp / ISO date (optional)
+//
+// Collection: receivablesFacilities/{facilityId}
+// Document ID: Facility UUID
+// Fields:
+//   - id: string (optional, 1-128 chars, immutable)
+//   - organisationId: string (required, 1-128 chars, immutable)
+//   - accountName: string (required, 2-150 chars)
+//   - facilityNumber: string (required, 2-100 chars, immutable)
+//   - scenario: string (required, 2-200 chars)
+//   - currency: string (required, 3-10 chars)
+//   - totalLimit: number (required, >= 0)
+//   - utilisedAmount: number (required, >= 0)
+//   - availableLimit: number (required, >= 0 && <= totalLimit)
+//   - advanceRatePct: number (required, > 0 && <= 100)
+//   - status: string (required, 'ACTIVE' | 'REVIEW')
+//   - createdAt: timestamp / ISO date (optional, immutable)
+//   - updatedAt: timestamp / ISO date (optional)
+//
+// Collection: registeredDevices/{deviceId}
+// Document ID: Device UUID
+// Fields:
+//   - id: string (optional, 1-128 chars, immutable)
+//   - userId: string (required, 1-128 chars, immutable)
+//   - deviceName: string (required, 1-120 chars)
+//   - platform: string (required, 1-100 chars)
+//   - deviceType: string (required, 'MOBILE_AUTH' | 'PASSKEY' | 'HARDWARE_TOKEN', immutable)
+//   - status: string (required, 'ACTIVE' | 'DEACTIVATED')
+//   - lastUsedAt: timestamp / ISO date | null (optional)
+//   - registeredAt: timestamp / ISO date (optional, immutable)
+//
+// Collection: serviceRequests/{reqId}
+// Document ID: Service Request UUID
+// Fields:
+//   - id: string (optional, 1-128 chars, immutable)
+//   - reference: string (required, 2-100 chars, immutable)
+//   - organisationId: string (required, 1-128 chars, immutable)
+//   - userId: string (required, 1-128 chars, immutable)
+//   - requestType: string (required, 2-100 chars)
+//   - accountId: string | null (optional, max 128 chars)
+//   - period: string | null (optional, max 100 chars)
+//   - details: map (optional, max 20 keys)
+//   - detailsJson: string | null (optional, max 2000 chars)
+//   - status: string (required, 'PENDING' | 'IN_PROGRESS' | 'COMPLETED' | 'REJECTED')
+//   - documentName: string | null (optional, max 200 chars)
+//   - createdAt: timestamp / ISO date (optional, immutable)
+//   - updatedAt: timestamp / ISO date (optional)
+//
+// Collection: fraudReports/{reportId}
+// Document ID: Fraud Report UUID
+// Fields:
+//   - id: string (optional, 1-128 chars, immutable)
+//   - reference: string (required, 2-100 chars, immutable)
+//   - userId: string (required, 1-128 chars, immutable)
+//   - organisationId: string (required, 1-128 chars, immutable)
+//   - paymentReference: string (required, 2-100 chars, immutable)
+//   - reason: string (required, 5-500 chars, immutable)
+//   - details: string | null (optional, max 2000 chars, immutable)
+//   - status: string (required, 'CASE_OPENED_SANDBOX' | 'OPEN' | 'UNDER_INVESTIGATION' | 'RESOLVED' | 'CLOSED', immutable)
+//   - createdAt: timestamp / ISO date (optional, immutable)
+//
 // ===============================================================
 
 service cloud.firestore {
@@ -157,19 +322,61 @@ service cloud.firestore {
 
     // Check if user is the designated owner by matching UID
     function isOwner(uid) {
-      return isAuthenticated() && request.auth.uid == uid;
+      return isAuthenticated() && uid is string && request.auth.uid == uid;
     }
 
-    // Check if the authenticated user has verified administrator privileges
-    // Authority source: custom auth claim `token.admin == true` OR verified role in users collection
-    function isAdmin() {
+    // Check if the authenticated user holds verified global/system administrator privileges
+    // Authority source: custom auth claim (`token.admin == true` / system role) OR verified system role in users collection
+    function isSystemAdmin() {
       return isAuthenticated() && (
-        (request.auth.token.get('admin', false) == true) ||
+        request.auth.token.get('admin', false) == true ||
+        request.auth.token.get('role', '') in ['superadmin', 'admin', 'SYSTEM_ADMIN', 'SUPER_ADMIN'] ||
         (
           exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
-          get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ['admin', 'superadmin']
+          get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ['admin', 'superadmin', 'SYSTEM_ADMIN', 'SUPER_ADMIN']
         )
       );
+    }
+
+    // Alias preserving existing retail/legacy rules
+    function isAdmin() {
+      return isSystemAdmin();
+    }
+
+    // Deterministic membership document path for organisation-isolated RBAC
+    function orgMembershipPath(orgId) {
+      return /databases/$(database)/documents/organisationUsers/$(orgId + '_' + request.auth.uid);
+    }
+
+    // Verify user is an active member of the given organisation
+    function isActiveOrgMember(orgId) {
+      return isAuthenticated() &&
+        orgId is string &&
+        orgId.size() > 0 &&
+        orgId.size() <= 128 &&
+        exists(orgMembershipPath(orgId)) &&
+        get(orgMembershipPath(orgId)).data.userId == request.auth.uid &&
+        get(orgMembershipPath(orgId)).data.organisationId == orgId &&
+        (!('status' in get(orgMembershipPath(orgId)).data) ||
+         get(orgMembershipPath(orgId)).data.status == 'ACTIVE');
+    }
+
+    // Verify user is an active ORG_ADMIN of the given organisation
+    function isOrgAdmin(orgId) {
+      return isActiveOrgMember(orgId) &&
+        get(orgMembershipPath(orgId)).data.role == 'ORG_ADMIN';
+    }
+
+    // Verify user holds any of the specified granular permissions in the given organisation
+    function hasAnyOrgPermission(orgId, perms) {
+      return isActiveOrgMember(orgId) &&
+        get(orgMembershipPath(orgId)).data.permissions is list &&
+        get(orgMembershipPath(orgId)).data.permissions.hasAny(perms);
+    }
+
+    // Verify user holds a specific granular permission in the given organisation
+    function hasOrgPermission(orgId, perm) {
+      return hasAnyOrgPermission(orgId, [perm]);
     }
 
     // Validate email format
@@ -179,8 +386,53 @@ service cloud.firestore {
         email.matches("^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$");
     }
 
+    // Validate required fields exist
+    function hasRequiredFields(data, fields) {
+      return data.keys().hasAll(fields);
+    }
+
+    // Validate document contains only allowed fields
+    function hasOnlyAllowedFields(data, fields) {
+      return data.keys().hasOnly(fields);
+    }
+
+    // Validate immutable fields have not changed on update
+    function areImmutableFieldsUnchanged(fields) {
+      return !request.resource.data.diff(resource.data).affectedKeys().hasAny(fields);
+    }
+
+    // Validate bounded non-empty string
+    function isNonEmptyString(val, minLen, maxLen) {
+      return val is string && val.size() >= minLen && val.size() <= maxLen;
+    }
+
+    // Validate optional string (if present, must be string within bounds)
+    function isValidOptionalString(data, field, maxLen) {
+      return !(field in data) || (data[field] is string && data[field].size() <= maxLen);
+    }
+
+    // Validate optional nullable string
+    function isValidOptionalNullableString(data, field, maxLen) {
+      return !(field in data) || data[field] == null || (data[field] is string && data[field].size() <= maxLen);
+    }
+
+    // Validate Firestore timestamp or bounded ISO-8601 date string
+    function isValidTimestampOrDate(val) {
+      return val is timestamp || (val is string && val.size() > 0 && val.size() <= 64);
+    }
+
+    // Validate optional timestamp or bounded ISO-8601 date string
+    function isValidOptionalTimestamp(data, field) {
+      return !(field in data) || isValidTimestampOrDate(data[field]);
+    }
+
+    // Validate optional nullable timestamp or bounded ISO-8601 date string
+    function isValidOptionalNullableTimestamp(data, field) {
+      return !(field in data) || data[field] == null || isValidTimestampOrDate(data[field]);
+    }
+
     // ===============================================================
-    // Domain Validators
+    // Domain Validators (Existing Collections)
     // ===============================================================
 
     // Validate user profile schema
@@ -189,7 +441,11 @@ service cloud.firestore {
         (!('displayName' in data) || (data.displayName is string && data.displayName.size() >= 2 && data.displayName.size() <= 100)) &&
         (!('email' in data) || isValidEmail(data.email)) &&
         (!('phone' in data) || (data.phone is string && data.phone.size() <= 30)) &&
-        (!('role' in data) || (data.role is string && data.role in ['customer', 'admin', 'superadmin'])) &&
+        (!('role' in data) || (data.role is string && data.role in [
+          'customer', 'admin', 'superadmin', 'SYSTEM_ADMIN', 'SUPER_ADMIN',
+          'ORG_ADMIN', 'PAYMENT_INITIATOR', 'PAYMENT_APPROVER', 'AUTHORISER',
+          'FINANCE_VIEWER', 'AUDITOR', 'SUPPORT_ADMIN', 'USER', 'OPERATIONS', 'SUPPORT', 'COMPLIANCE'
+        ])) &&
         (!('customerId' in data) || (data.customerId is string && data.customerId.size() <= 50)) &&
         (!('accountStatus' in data) || (data.accountStatus is string && data.accountStatus in ['active', 'suspended', 'pending'])) &&
         (!('kycStatus' in data) || (data.kycStatus is string && data.kycStatus in ['VERIFIED', 'PENDING', 'REJECTED'])) &&
@@ -270,6 +526,408 @@ service cloud.firestore {
         data.action is string && data.action.size() <= 100 &&
         data.targetUid is string && data.targetUid.size() <= 128 &&
         data.reason is string && data.reason.size() <= 1000;
+    }
+
+    // ===============================================================
+    // Domain Validators (Corporate Banking Collections)
+    // ===============================================================
+
+    // Validate organisation module flags map
+    function isValidOrganisationModules(modules) {
+      return modules is map &&
+        modules.keys().hasOnly([
+          'accounts', 'authorisations', 'payments', 'track', 'liquidity',
+          'tradeFinance', 'receivablesFinance', 'remoteDepositCapture', 'billPayments', 'selfService'
+        ]) &&
+        (!('accounts' in modules) || modules.accounts is bool) &&
+        (!('authorisations' in modules) || modules.authorisations is bool) &&
+        (!('payments' in modules) || modules.payments is bool) &&
+        (!('track' in modules) || modules.track is bool) &&
+        (!('liquidity' in modules) || modules.liquidity is bool) &&
+        (!('tradeFinance' in modules) || modules.tradeFinance is bool) &&
+        (!('receivablesFinance' in modules) || modules.receivablesFinance is bool) &&
+        (!('remoteDepositCapture' in modules) || modules.remoteDepositCapture is bool) &&
+        (!('billPayments' in modules) || modules.billPayments is bool) &&
+        (!('selfService' in modules) || modules.selfService is bool);
+    }
+
+    // Validate organisations/{orgId} schema
+    function isValidOrganisation(data) {
+      return hasRequiredFields(data, ['name', 'registrationNumber', 'country', 'baseCurrency', 'status', 'isSandbox', 'modules']) &&
+        hasOnlyAllowedFields(data, [
+          'id', 'name', 'registrationNumber', 'country', 'baseCurrency',
+          'status', 'isSandbox', 'modules', 'createdAt', 'updatedAt'
+        ]) &&
+        isValidOptionalString(data, 'id', 128) &&
+        isNonEmptyString(data.name, 2, 150) &&
+        isNonEmptyString(data.registrationNumber, 2, 50) &&
+        isNonEmptyString(data.country, 2, 10) &&
+        isNonEmptyString(data.baseCurrency, 3, 10) &&
+        data.status is string && data.status in ['ACTIVE', 'SUSPENDED'] &&
+        data.isSandbox is bool &&
+        isValidOrganisationModules(data.modules) &&
+        isValidOptionalTimestamp(data, 'createdAt') &&
+        isValidOptionalTimestamp(data, 'updatedAt');
+    }
+
+    // Validate organisationUsers/{membershipId} schema
+    function isValidOrganisationUser(data) {
+      let allowedRoles = [
+        'ORG_ADMIN', 'PAYMENT_INITIATOR', 'PAYMENT_APPROVER', 'AUTHORISER',
+        'FINANCE_VIEWER', 'AUDITOR', 'SUPPORT_ADMIN', 'USER'
+      ];
+      let allowedPermissions = [
+        'VIEW_ACCOUNTS', 'VIEW_BALANCES', 'VIEW_TRANSACTIONS', 'CREATE_PAYMENTS',
+        'APPROVE_PAYMENTS', 'REJECT_PAYMENTS', 'MANAGE_BENEFICIARIES',
+        'ACCESS_TRADE_FINANCE', 'ACCESS_RECEIVABLES_FINANCE', 'VIEW_LIQUIDITY',
+        'ACCESS_RDC', 'REQUEST_DOCUMENTS', 'MANAGE_USERS', 'MANAGE_ORGANISATIONS',
+        'MANAGE_POLICIES', 'VIEW_AUDIT_LOGS'
+      ];
+      return hasRequiredFields(data, ['organisationId', 'userId', 'role', 'permissions']) &&
+        hasOnlyAllowedFields(data, [
+          'id', 'membershipId', 'organisationId', 'userId', 'role',
+          'permissions', 'isDefault', 'status', 'createdAt', 'updatedAt'
+        ]) &&
+        isValidOptionalString(data, 'id', 256) &&
+        isValidOptionalString(data, 'membershipId', 256) &&
+        isNonEmptyString(data.organisationId, 1, 128) &&
+        isNonEmptyString(data.userId, 1, 128) &&
+        data.role is string && data.role in allowedRoles &&
+        data.permissions is list &&
+        data.permissions.size() <= 25 &&
+        data.permissions.hasOnly(allowedPermissions) &&
+        (!('isDefault' in data) || data.isDefault is bool) &&
+        (!('status' in data) || (data.status is string && data.status in ['ACTIVE', 'SUSPENDED', 'REVOKED'])) &&
+        isValidOptionalTimestamp(data, 'createdAt') &&
+        isValidOptionalTimestamp(data, 'updatedAt');
+    }
+
+    // Validate a single approvalHistory entry on paymentInstructions
+    function isValidPaymentApprovalEntry(entry) {
+      return entry is map &&
+        hasRequiredFields(entry, ['approverId', 'approverName', 'approverRole', 'decision', 'timestamp']) &&
+        hasOnlyAllowedFields(entry, ['approverId', 'approverName', 'approverRole', 'decision', 'comment', 'timestamp']) &&
+        isNonEmptyString(entry.approverId, 1, 128) &&
+        isNonEmptyString(entry.approverName, 1, 120) &&
+        isNonEmptyString(entry.approverRole, 1, 64) &&
+        entry.decision is string && entry.decision in ['APPROVED', 'REJECTED', 'INFO_REQUESTED'] &&
+        isValidOptionalNullableString(entry, 'comment', 500) &&
+        isValidTimestampOrDate(entry.timestamp);
+    }
+
+    // Validate a single timeline event on paymentInstructions / tradeTransactions
+    function isValidTimelineEvent(ev) {
+      return ev is map &&
+        hasRequiredFields(ev, ['id', 'stage', 'label', 'description', 'timestamp', 'state']) &&
+        hasOnlyAllowedFields(ev, ['id', 'stage', 'label', 'description', 'actor', 'timestamp', 'state']) &&
+        isNonEmptyString(ev.id, 1, 128) &&
+        isNonEmptyString(ev.stage, 1, 64) &&
+        isNonEmptyString(ev.label, 1, 150) &&
+        isNonEmptyString(ev.description, 1, 500) &&
+        isValidOptionalNullableString(ev, 'actor', 120) &&
+        isValidTimestampOrDate(ev.timestamp) &&
+        ev.state is string && ev.state in ['COMPLETED', 'CURRENT', 'UPCOMING', 'FAILED'];
+    }
+
+    // Validate paymentInstructions/{paymentId} schema
+    function isValidPaymentInstruction(data) {
+      let validCategories = [
+        'PRIORITY_PAYMENT', 'INTERNATIONAL_PAYMENT', 'INTER_ACCOUNT_TRANSFER',
+        'SEPA_PAYMENT', 'ACH_CREDIT', 'ACH_DEBIT', 'BILL_PAYMENT',
+        'PAYMENT_FILE', 'FILE_LEVEL_INSTRUCTION', 'TRADE_AUTHORISATION',
+        'IMPORT_DOCUMENTARY_CREDIT', 'DC_AMENDMENT', 'IMPORT_BILL', 'IMPORT_LOAN'
+      ];
+      let validStatuses = [
+        'DRAFT', 'PENDING_SUBMISSION', 'AWAITING_AUTHORISATION',
+        'PARTIALLY_AUTHORISED', 'AUTHORISED', 'PROCESSING', 'SENT',
+        'COMPLETED', 'REJECTED', 'CANCELLED', 'FAILED', 'RETURNED'
+      ];
+      return hasRequiredFields(data, [
+          'reference', 'organisationId', 'initiatorId', 'initiatorName', 'category',
+          'debitAccountId', 'debitAccountName', 'debitCurrency',
+          'beneficiaryName', 'beneficiaryAccount', 'beneficiaryBank', 'destinationCountry',
+          'amount', 'currency', 'chargesBearer', 'chargesAmount', 'paymentPurpose',
+          'paymentDate', 'referenceNote', 'status', 'requiredApprovals', 'currentApprovals',
+          'approvalHistory', 'timeline'
+        ]) &&
+        hasOnlyAllowedFields(data, [
+          'id', 'reference', 'organisationId', 'initiatorId', 'initiatorName', 'category',
+          'debitAccountId', 'debitAccountName', 'debitCurrency',
+          'beneficiaryId', 'beneficiaryName', 'beneficiaryAccount', 'beneficiaryBank',
+          'destinationCountry', 'swiftBic', 'iban', 'amount', 'currency',
+          'exchangeRate', 'convertedAmount', 'chargesBearer', 'chargesAmount',
+          'paymentPurpose', 'paymentDate', 'referenceNote', 'additionalInfo',
+          'status', 'requiredApprovals', 'currentApprovals', 'approvalHistory',
+          'timeline', 'unusualFlags', 'expiresAt', 'createdAt', 'updatedAt'
+        ]) &&
+        isValidOptionalString(data, 'id', 128) &&
+        isNonEmptyString(data.reference, 2, 100) &&
+        isNonEmptyString(data.organisationId, 1, 128) &&
+        isNonEmptyString(data.initiatorId, 1, 128) &&
+        isNonEmptyString(data.initiatorName, 1, 120) &&
+        data.category is string && data.category in validCategories &&
+        isNonEmptyString(data.debitAccountId, 1, 128) &&
+        isNonEmptyString(data.debitAccountName, 1, 150) &&
+        isNonEmptyString(data.debitCurrency, 3, 10) &&
+        isValidOptionalNullableString(data, 'beneficiaryId', 128) &&
+        isNonEmptyString(data.beneficiaryName, 1, 150) &&
+        isNonEmptyString(data.beneficiaryAccount, 2, 100) &&
+        isNonEmptyString(data.beneficiaryBank, 1, 150) &&
+        isNonEmptyString(data.destinationCountry, 2, 10) &&
+        isValidOptionalNullableString(data, 'swiftBic', 20) &&
+        isValidOptionalNullableString(data, 'iban', 50) &&
+        data.amount is number && data.amount > 0 &&
+        isNonEmptyString(data.currency, 3, 10) &&
+        (!('exchangeRate' in data) || data.exchangeRate == null || (data.exchangeRate is number && data.exchangeRate > 0)) &&
+        (!('convertedAmount' in data) || data.convertedAmount == null || (data.convertedAmount is number && data.convertedAmount >= 0)) &&
+        data.chargesBearer is string && data.chargesBearer in ['OUR', 'SHA', 'BEN'] &&
+        data.chargesAmount is number && data.chargesAmount >= 0 &&
+        isNonEmptyString(data.paymentPurpose, 1, 50) &&
+        isNonEmptyString(data.paymentDate, 4, 64) &&
+        data.referenceNote is string && data.referenceNote.size() <= 500 &&
+        isValidOptionalNullableString(data, 'additionalInfo', 1000) &&
+        data.status is string && data.status in validStatuses &&
+        data.requiredApprovals is int && data.requiredApprovals >= 1 && data.requiredApprovals <= 10 &&
+        data.currentApprovals is int && data.currentApprovals >= 0 && data.currentApprovals <= 10 &&
+        data.approvalHistory is list && data.approvalHistory.size() <= 20 &&
+        data.timeline is list && data.timeline.size() <= 50 &&
+        (!('unusualFlags' in data) || (
+          data.unusualFlags is list &&
+          data.unusualFlags.size() <= 20 &&
+          (data.unusualFlags.size() == 0 || (data.unusualFlags[0] is string && data.unusualFlags[0].size() <= 100))
+        )) &&
+        isValidOptionalNullableTimestamp(data, 'expiresAt') &&
+        isValidOptionalTimestamp(data, 'createdAt') &&
+        isValidOptionalTimestamp(data, 'updatedAt');
+    }
+
+    // Validate decision-specific state transition after verifying approvalHistory grew by 1
+    function isValidApprovalDecisionOutcome(orgId, prevStatus, prevApprovals, newEntry) {
+      let nextStatus = request.resource.data.status;
+      let nextApprovals = request.resource.data.currentApprovals;
+      return isValidPaymentApprovalEntry(newEntry) &&
+        newEntry.approverId == request.auth.uid &&
+        (
+          (
+            newEntry.decision == 'APPROVED' &&
+            hasOrgPermission(orgId, 'APPROVE_PAYMENTS') &&
+            nextApprovals == prevApprovals + 1 &&
+            (
+              (nextApprovals < resource.data.requiredApprovals && nextStatus == 'PARTIALLY_AUTHORISED') ||
+              (nextApprovals >= resource.data.requiredApprovals && nextStatus == 'AUTHORISED')
+            )
+          ) ||
+          (
+            newEntry.decision == 'REJECTED' &&
+            hasOrgPermission(orgId, 'REJECT_PAYMENTS') &&
+            nextApprovals == prevApprovals &&
+            nextStatus == 'REJECTED'
+          ) ||
+          (
+            newEntry.decision == 'INFO_REQUESTED' &&
+            hasAnyOrgPermission(orgId, ['APPROVE_PAYMENTS', 'REJECT_PAYMENTS']) &&
+            nextApprovals == prevApprovals &&
+            nextStatus == prevStatus
+          )
+        );
+    }
+
+    // Validate maker-checker payment decision transitions for non-admin approvers
+    function isValidClientPaymentDecision() {
+      let orgId = resource.data.organisationId;
+      let prevStatus = resource.data.status;
+      let prevApprovals = resource.data.currentApprovals;
+      let prevHist = resource.data.approvalHistory;
+      let nextHist = request.resource.data.approvalHistory;
+      let immutablePaymentFields = [
+        'id', 'reference', 'organisationId', 'initiatorId', 'initiatorName', 'category',
+        'debitAccountId', 'debitAccountName', 'debitCurrency',
+        'beneficiaryId', 'beneficiaryName', 'beneficiaryAccount', 'beneficiaryBank',
+        'destinationCountry', 'swiftBic', 'iban', 'amount', 'currency',
+        'exchangeRate', 'convertedAmount', 'chargesBearer', 'chargesAmount',
+        'paymentPurpose', 'paymentDate', 'referenceNote', 'additionalInfo',
+        'requiredApprovals', 'unusualFlags', 'expiresAt', 'createdAt'
+      ];
+      return isActiveOrgMember(orgId) &&
+        resource.data.initiatorId != request.auth.uid &&
+        prevStatus in ['AWAITING_AUTHORISATION', 'PARTIALLY_AUTHORISED'] &&
+        areImmutableFieldsUnchanged(immutablePaymentFields) &&
+        nextHist.size() == prevHist.size() + 1 &&
+        nextHist.hasAll(prevHist) &&
+        request.resource.data.timeline.size() >= resource.data.timeline.size() &&
+        request.resource.data.timeline.size() <= resource.data.timeline.size() + 2 &&
+        (
+          request.resource.data.timeline.size() == resource.data.timeline.size() ||
+          isValidTimelineEvent(request.resource.data.timeline[request.resource.data.timeline.size() - 1])
+        ) &&
+        isValidApprovalDecisionOutcome(orgId, prevStatus, prevApprovals, nextHist[nextHist.size() - 1]);
+    }
+
+    // Validate initiator submission/cancellation of their own draft or pending payment
+    function isValidInitiatorPaymentUpdate() {
+      let prevStatus = resource.data.status;
+      let nextStatus = request.resource.data.status;
+      return isActiveOrgMember(resource.data.organisationId) &&
+        hasOrgPermission(resource.data.organisationId, 'CREATE_PAYMENTS') &&
+        resource.data.initiatorId == request.auth.uid &&
+        areImmutableFieldsUnchanged([
+          'id', 'reference', 'organisationId', 'initiatorId', 'initiatorName',
+          'requiredApprovals', 'currentApprovals', 'approvalHistory', 'createdAt'
+        ]) &&
+        request.resource.data.currentApprovals == 0 &&
+        request.resource.data.approvalHistory.size() == 0 &&
+        (
+          (prevStatus == 'DRAFT' && nextStatus in ['DRAFT', 'PENDING_SUBMISSION', 'AWAITING_AUTHORISATION', 'CANCELLED']) ||
+          (prevStatus == 'PENDING_SUBMISSION' && nextStatus in ['AWAITING_AUTHORISATION', 'CANCELLED'] &&
+           areImmutableFieldsUnchanged(['amount', 'currency', 'debitAccountId', 'beneficiaryAccount', 'beneficiaryName'])) ||
+          (prevStatus == 'AWAITING_AUTHORISATION' && nextStatus == 'CANCELLED' &&
+           areImmutableFieldsUnchanged(['amount', 'currency', 'debitAccountId', 'beneficiaryAccount', 'beneficiaryName']))
+        );
+    }
+
+    // Validate approvalPolicies/{policyId} schema
+    function isValidApprovalPolicy(data) {
+      return hasRequiredFields(data, [
+          'organisationId', 'name', 'currency', 'minAmount', 'maxAmount',
+          'requiredApprovals', 'makerCheckerEnforced', 'requireStepUpAuth', 'isActive'
+        ]) &&
+        hasOnlyAllowedFields(data, [
+          'id', 'organisationId', 'name', 'currency', 'minAmount', 'maxAmount',
+          'requiredApprovals', 'makerCheckerEnforced', 'requireStepUpAuth', 'isActive',
+          'createdAt', 'updatedAt'
+        ]) &&
+        isValidOptionalString(data, 'id', 128) &&
+        isNonEmptyString(data.organisationId, 1, 128) &&
+        isNonEmptyString(data.name, 2, 120) &&
+        isNonEmptyString(data.currency, 3, 10) &&
+        data.minAmount is number && data.minAmount >= 0 &&
+        data.maxAmount is number && data.maxAmount >= data.minAmount &&
+        data.requiredApprovals is int && data.requiredApprovals >= 1 && data.requiredApprovals <= 10 &&
+        data.makerCheckerEnforced is bool &&
+        data.requireStepUpAuth is bool &&
+        data.isActive is bool &&
+        isValidOptionalTimestamp(data, 'createdAt') &&
+        isValidOptionalTimestamp(data, 'updatedAt');
+    }
+
+    // Validate tradeTransactions/{tradeId} schema
+    function isValidTradeTransaction(data) {
+      return hasRequiredFields(data, [
+          'reference', 'organisationId', 'tradeCategory', 'direction',
+          'counterparty', 'amount', 'currency', 'status',
+          'documents', 'timeline', 'approvalHistory'
+        ]) &&
+        hasOnlyAllowedFields(data, [
+          'id', 'reference', 'organisationId', 'tradeCategory', 'direction',
+          'counterparty', 'amount', 'currency', 'status', 'pendingAction',
+          'documents', 'timeline', 'approvalHistory', 'createdAt', 'updatedAt'
+        ]) &&
+        isValidOptionalString(data, 'id', 128) &&
+        isNonEmptyString(data.reference, 2, 100) &&
+        isNonEmptyString(data.organisationId, 1, 128) &&
+        data.tradeCategory is string && data.tradeCategory in [
+          'IMPORT_DC', 'DC_AMENDMENT', 'IMPORT_BILL', 'IMPORT_LOAN', 'EXPORT_COLLECTION'
+        ] &&
+        data.direction is string && data.direction in ['IMPORT', 'EXPORT'] &&
+        isNonEmptyString(data.counterparty, 2, 200) &&
+        data.amount is number && data.amount > 0 &&
+        isNonEmptyString(data.currency, 3, 10) &&
+        data.status is string && data.status in [
+          'AWAITING_AUTHORISATION', 'IN_PROGRESS', 'ISSUED', 'SETTLED', 'REJECTED'
+        ] &&
+        isValidOptionalNullableString(data, 'pendingAction', 200) &&
+        data.documents is list && data.documents.size() <= 30 &&
+        data.timeline is list && data.timeline.size() <= 50 &&
+        data.approvalHistory is list && data.approvalHistory.size() <= 20 &&
+        isValidOptionalTimestamp(data, 'createdAt') &&
+        isValidOptionalTimestamp(data, 'updatedAt');
+    }
+
+    // Validate receivablesFacilities/{facilityId} schema
+    function isValidReceivablesFacility(data) {
+      return hasRequiredFields(data, [
+          'organisationId', 'accountName', 'facilityNumber', 'scenario',
+          'currency', 'totalLimit', 'utilisedAmount', 'availableLimit',
+          'advanceRatePct', 'status'
+        ]) &&
+        hasOnlyAllowedFields(data, [
+          'id', 'organisationId', 'accountName', 'facilityNumber', 'scenario',
+          'currency', 'totalLimit', 'utilisedAmount', 'availableLimit',
+          'advanceRatePct', 'status', 'createdAt', 'updatedAt'
+        ]) &&
+        isValidOptionalString(data, 'id', 128) &&
+        isNonEmptyString(data.organisationId, 1, 128) &&
+        isNonEmptyString(data.accountName, 2, 150) &&
+        isNonEmptyString(data.facilityNumber, 2, 100) &&
+        isNonEmptyString(data.scenario, 2, 200) &&
+        isNonEmptyString(data.currency, 3, 10) &&
+        data.totalLimit is number && data.totalLimit >= 0 &&
+        data.utilisedAmount is number && data.utilisedAmount >= 0 &&
+        data.availableLimit is number && data.availableLimit >= 0 && data.availableLimit <= data.totalLimit &&
+        data.advanceRatePct is number && data.advanceRatePct > 0 && data.advanceRatePct <= 100 &&
+        data.status is string && data.status in ['ACTIVE', 'REVIEW'] &&
+        isValidOptionalTimestamp(data, 'createdAt') &&
+        isValidOptionalTimestamp(data, 'updatedAt');
+    }
+
+    // Validate registeredDevices/{deviceId} schema
+    function isValidRegisteredDevice(data) {
+      return hasRequiredFields(data, ['userId', 'deviceName', 'platform', 'deviceType', 'status']) &&
+        hasOnlyAllowedFields(data, [
+          'id', 'userId', 'deviceName', 'platform', 'deviceType',
+          'status', 'lastUsedAt', 'registeredAt'
+        ]) &&
+        isValidOptionalString(data, 'id', 128) &&
+        isNonEmptyString(data.userId, 1, 128) &&
+        isNonEmptyString(data.deviceName, 1, 120) &&
+        isNonEmptyString(data.platform, 1, 100) &&
+        data.deviceType is string && data.deviceType in ['MOBILE_AUTH', 'PASSKEY', 'HARDWARE_TOKEN'] &&
+        data.status is string && data.status in ['ACTIVE', 'DEACTIVATED'] &&
+        isValidOptionalNullableTimestamp(data, 'lastUsedAt') &&
+        isValidOptionalTimestamp(data, 'registeredAt');
+    }
+
+    // Validate serviceRequests/{reqId} schema
+    function isValidServiceRequest(data) {
+      return hasRequiredFields(data, ['reference', 'organisationId', 'userId', 'requestType', 'status']) &&
+        hasOnlyAllowedFields(data, [
+          'id', 'reference', 'organisationId', 'userId', 'requestType',
+          'accountId', 'period', 'details', 'detailsJson', 'status',
+          'documentName', 'createdAt', 'updatedAt'
+        ]) &&
+        isValidOptionalString(data, 'id', 128) &&
+        isNonEmptyString(data.reference, 2, 100) &&
+        isNonEmptyString(data.organisationId, 1, 128) &&
+        isNonEmptyString(data.userId, 1, 128) &&
+        isNonEmptyString(data.requestType, 2, 100) &&
+        isValidOptionalNullableString(data, 'accountId', 128) &&
+        isValidOptionalNullableString(data, 'period', 100) &&
+        (!('details' in data) || (data.details is map && data.details.size() <= 20)) &&
+        isValidOptionalNullableString(data, 'detailsJson', 2000) &&
+        data.status is string && data.status in ['PENDING', 'IN_PROGRESS', 'COMPLETED', 'REJECTED'] &&
+        isValidOptionalNullableString(data, 'documentName', 200) &&
+        isValidOptionalTimestamp(data, 'createdAt') &&
+        isValidOptionalTimestamp(data, 'updatedAt');
+    }
+
+    // Validate fraudReports/{reportId} schema
+    function isValidFraudReport(data) {
+      return hasRequiredFields(data, ['reference', 'userId', 'organisationId', 'paymentReference', 'reason', 'status']) &&
+        hasOnlyAllowedFields(data, [
+          'id', 'reference', 'userId', 'organisationId', 'paymentReference',
+          'reason', 'details', 'status', 'createdAt'
+        ]) &&
+        isValidOptionalString(data, 'id', 128) &&
+        isNonEmptyString(data.reference, 2, 100) &&
+        isNonEmptyString(data.userId, 1, 128) &&
+        isNonEmptyString(data.organisationId, 1, 128) &&
+        isNonEmptyString(data.paymentReference, 2, 100) &&
+        isNonEmptyString(data.reason, 5, 500) &&
+        isValidOptionalNullableString(data, 'details', 2000) &&
+        data.status is string && data.status in [
+          'CASE_OPENED_SANDBOX', 'OPEN', 'UNDER_INVESTIGATION', 'RESOLVED', 'CLOSED'
+        ] &&
+        isValidOptionalTimestamp(data, 'createdAt');
     }
 
     // ===============================================================
@@ -541,6 +1199,235 @@ service cloud.firestore {
     match /auditLogs/{logId} {
       allow read: if isAdmin();
       allow create: if isAdmin() && isValidAuditLog(request.resource.data);
+      allow update, delete: if false;
+    }
+
+    // ===============================================================
+    // 11. Organisations Collection (Corporate Banking)
+    // ===============================================================
+    // Readable by verified active organisation members and system admins.
+    // Provisioning and structural configuration restricted exclusively to system admins.
+    match /organisations/{orgId} {
+      allow read: if isSystemAdmin() || isActiveOrgMember(orgId);
+
+      allow create: if isSystemAdmin() &&
+        isValidOrganisation(request.resource.data) &&
+        (!('id' in request.resource.data) || request.resource.data.id == orgId);
+
+      allow update: if isSystemAdmin() &&
+        isValidOrganisation(request.resource.data) &&
+        areImmutableFieldsUnchanged(['id', 'createdAt']);
+
+      allow delete: if isSystemAdmin();
+    }
+
+    // ===============================================================
+    // 12. Organisation Users (Membership & Granular RBAC)
+    // ===============================================================
+    // Document ID MUST follow `{organisationId}_{userId}` for deterministic RBAC checks.
+    // Readable by the member, their organisation's ORG_ADMIN, or a system admin.
+    // Self-elevation is strictly prohibited: orgAdmins cannot modify their own membership
+    // or grant system-level privileges.
+    match /organisationUsers/{membershipId} {
+      allow read: if isSystemAdmin() ||
+        isOwner(resource.data.userId) ||
+        isOrgAdmin(resource.data.organisationId);
+
+      allow create: if isValidOrganisationUser(request.resource.data) &&
+        membershipId == request.resource.data.organisationId + '_' + request.resource.data.userId &&
+        (
+          isSystemAdmin() ||
+          (
+            isOrgAdmin(request.resource.data.organisationId) &&
+            request.resource.data.userId != request.auth.uid &&
+            !request.resource.data.permissions.hasAny(['MANAGE_ORGANISATIONS'])
+          )
+        );
+
+      allow update: if isValidOrganisationUser(request.resource.data) &&
+        areImmutableFieldsUnchanged(['id', 'membershipId', 'organisationId', 'userId', 'createdAt']) &&
+        (
+          isSystemAdmin() ||
+          (
+            isOrgAdmin(resource.data.organisationId) &&
+            resource.data.userId != request.auth.uid &&
+            !request.resource.data.permissions.hasAny(['MANAGE_ORGANISATIONS'])
+          )
+        );
+
+      allow delete: if isSystemAdmin() ||
+        (isOrgAdmin(resource.data.organisationId) && resource.data.userId != request.auth.uid);
+    }
+
+    // ===============================================================
+    // 13. Payment Instructions (Maker-Checker Corporate Payments)
+    // ===============================================================
+    // Read restricted to organisation members holding VIEW_ACCOUNTS or APPROVE_PAYMENTS.
+    // Creation requires active org membership with CREATE_PAYMENTS and initiatorId == auth.uid,
+    // and enforces initial unapproved status.
+    // Approval/rejection transitions enforce strict maker-checker isolation (initiatorId != auth.uid)
+    // and protect financial/beneficiary fields; settlement states remain server/admin only.
+    match /paymentInstructions/{paymentId} {
+      allow read: if isSystemAdmin() ||
+        hasAnyOrgPermission(resource.data.organisationId, ['VIEW_ACCOUNTS', 'APPROVE_PAYMENTS']);
+
+      allow create: if isValidPaymentInstruction(request.resource.data) &&
+        (
+          isSystemAdmin() ||
+          (
+            isActiveOrgMember(request.resource.data.organisationId) &&
+            hasOrgPermission(request.resource.data.organisationId, 'CREATE_PAYMENTS') &&
+            request.resource.data.initiatorId == request.auth.uid &&
+            request.resource.data.status in ['DRAFT', 'PENDING_SUBMISSION', 'AWAITING_AUTHORISATION'] &&
+            request.resource.data.currentApprovals == 0 &&
+            request.resource.data.approvalHistory.size() == 0 &&
+            request.resource.data.timeline.size() <= 5 &&
+            (
+              request.resource.data.timeline.size() == 0 ||
+              isValidTimelineEvent(request.resource.data.timeline[0])
+            )
+          )
+        );
+
+      allow update: if isValidPaymentInstruction(request.resource.data) &&
+        (
+          (
+            isSystemAdmin() &&
+            areImmutableFieldsUnchanged(['id', 'reference', 'organisationId', 'initiatorId', 'createdAt'])
+          ) ||
+          isValidClientPaymentDecision() ||
+          isValidInitiatorPaymentUpdate()
+        );
+
+      allow delete: if isSystemAdmin();
+    }
+
+    // ===============================================================
+    // 14. Approval Policies (Maker-Checker & Amount Thresholds)
+    // ===============================================================
+    // Readable by active members of the owning organisation or system admins.
+    // Writable exclusively by the organisation's ORG_ADMIN or system admins.
+    match /approvalPolicies/{policyId} {
+      allow read: if isSystemAdmin() || isActiveOrgMember(resource.data.organisationId);
+
+      allow create: if isValidApprovalPolicy(request.resource.data) &&
+        (isSystemAdmin() || isOrgAdmin(request.resource.data.organisationId));
+
+      allow update: if isValidApprovalPolicy(request.resource.data) &&
+        areImmutableFieldsUnchanged(['id', 'organisationId', 'createdAt']) &&
+        (isSystemAdmin() || isOrgAdmin(resource.data.organisationId));
+
+      allow delete: if isSystemAdmin() || isOrgAdmin(resource.data.organisationId);
+    }
+
+    // ===============================================================
+    // 15. Trade Finance Transactions
+    // ===============================================================
+    // Readable by active members of the owning organisation or system admins.
+    // All writes strictly protected (server/system admin only).
+    match /tradeTransactions/{tradeId} {
+      allow read: if isSystemAdmin() || isActiveOrgMember(resource.data.organisationId);
+
+      allow create: if isSystemAdmin() && isValidTradeTransaction(request.resource.data);
+
+      allow update: if isSystemAdmin() &&
+        areImmutableFieldsUnchanged(['id', 'reference', 'organisationId', 'createdAt']) &&
+        isValidTradeTransaction(request.resource.data);
+
+      allow delete: if isSystemAdmin();
+    }
+
+    // ===============================================================
+    // 16. Receivables Finance Facilities
+    // ===============================================================
+    // Readable by active members of the owning organisation or system admins.
+    // All writes strictly protected (server/system admin only).
+    match /receivablesFacilities/{facilityId} {
+      allow read: if isSystemAdmin() || isActiveOrgMember(resource.data.organisationId);
+
+      allow create: if isSystemAdmin() && isValidReceivablesFacility(request.resource.data);
+
+      allow update: if isSystemAdmin() &&
+        areImmutableFieldsUnchanged(['id', 'organisationId', 'facilityNumber', 'createdAt']) &&
+        isValidReceivablesFacility(request.resource.data);
+
+      allow delete: if isSystemAdmin();
+    }
+
+    // ===============================================================
+    // 17. Registered Devices (Mobile Auth, Passkeys, Hardware Tokens)
+    // ===============================================================
+    // Read and managed exclusively by the owning user or system admins.
+    // Prevents reactivation of previously deactivated devices by non-admins.
+    match /registeredDevices/{deviceId} {
+      allow read: if isOwner(resource.data.userId) || isSystemAdmin();
+
+      allow create: if isValidRegisteredDevice(request.resource.data) &&
+        (
+          isSystemAdmin() ||
+          (
+            isAuthenticated() &&
+            request.resource.data.userId == request.auth.uid &&
+            request.resource.data.status == 'ACTIVE'
+          )
+        );
+
+      allow update: if isValidRegisteredDevice(request.resource.data) &&
+        areImmutableFieldsUnchanged(['id', 'userId', 'deviceType', 'registeredAt']) &&
+        (
+          isSystemAdmin() ||
+          (
+            isOwner(resource.data.userId) &&
+            (resource.data.status == 'ACTIVE' || request.resource.data.status == 'DEACTIVATED')
+          )
+        );
+
+      allow delete: if isOwner(resource.data.userId) || isSystemAdmin();
+    }
+
+    // ===============================================================
+    // 18. Service Requests (Self-Service & Document Requests)
+    // ===============================================================
+    // Readable by active org members, the request owner, or system admins.
+    // Created by an active org member as owner with protected initial status ('PENDING').
+    // Status transitions and document fulfillment restricted to server/system admins.
+    match /serviceRequests/{reqId} {
+      allow read: if isSystemAdmin() ||
+        isOwner(resource.data.userId) ||
+        isActiveOrgMember(resource.data.organisationId);
+
+      allow create: if isValidServiceRequest(request.resource.data) &&
+        (
+          isSystemAdmin() ||
+          (
+            isActiveOrgMember(request.resource.data.organisationId) &&
+            request.resource.data.userId == request.auth.uid &&
+            request.resource.data.status == 'PENDING' &&
+            (!('documentName' in request.resource.data) || request.resource.data.documentName == null)
+          )
+        );
+
+      allow update: if isSystemAdmin() &&
+        areImmutableFieldsUnchanged(['id', 'reference', 'organisationId', 'userId', 'createdAt']) &&
+        isValidServiceRequest(request.resource.data);
+
+      allow delete: if isSystemAdmin();
+    }
+
+    // ===============================================================
+    // 19. Fraud Reports (Immutable Fraud Case Submissions)
+    // ===============================================================
+    // Created by authenticated active org members matching userId == auth.uid.
+    // Readable only by the original reporter or system admins.
+    // Strictly immutable after creation (no updates or deletions permitted).
+    match /fraudReports/{reportId} {
+      allow read: if isOwner(resource.data.userId) || isSystemAdmin();
+
+      allow create: if isValidFraudReport(request.resource.data) &&
+        isActiveOrgMember(request.resource.data.organisationId) &&
+        request.resource.data.userId == request.auth.uid &&
+        request.resource.data.status in ['CASE_OPENED_SANDBOX', 'OPEN'];
+
       allow update, delete: if false;
     }
   }

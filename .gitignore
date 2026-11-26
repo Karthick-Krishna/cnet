@@ -7,3 +7,6 @@ build/
 .vercel/
 *.log
 cnet/
+*.tsbuildinfo
+data/banking.db-shm
+data/banking.db-wal
