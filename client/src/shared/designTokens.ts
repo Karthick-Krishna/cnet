@@ -1,53 +1,59 @@
 /**
  * Centralised Design Tokens for HSBC Cnet
- * Authentic corporate banking palette: crisp white, warm light grey, deep charcoal, HSBC Red (#DB0011).
+ * Enterprise dark-header & crisp light-content banking architecture inspired by HSBCnet Mobile.
+ * Note: Original implementation approximation values, not official proprietary HSBC design tokens.
  */
 export const DESIGN_TOKENS = {
   colors: {
-    // Surfaces
+    // Dark Geometric Header & Menu Surfaces
+    darkPrimary: '#263640',
+    darkSecondary: '#344651',
+    deepCharcoal: '#202A30',
+
+    // Light Content Surfaces
     surfacePrimary: '#FFFFFF',
-    surfaceSecondary: '#F4F4F4',
-    surfaceTertiary: '#EBEBEB',
-    surfaceNavy: '#252525', // Deep Charcoal header/utility surface
-    surfaceNavyHover: '#383838',
+    surfaceSecondary: '#F4F5F6',
+    surfaceTertiary: '#E9ECEF',
+    surfaceNavy: '#263640',
+    surfaceNavyHover: '#344651',
 
     // Typography
-    textPrimary: '#252525',
-    textSecondary: '#555555',
-    textMuted: '#767676',
+    textPrimary: '#252B30',
+    textSecondary: '#68727A',
+    textMuted: '#68727A',
     textInverse: '#FFFFFF',
 
-    // Brand Accents (HSBC Red)
-    accentPrimary: '#DB0011',
-    accentPrimaryHover: '#B0000D',
-    accentPrimarySoft: '#FDF2F2',
-    accentNavy: '#252525',
+    // Brand Accents
+    accentPrimary: '#DB001B',
+    accentPrimaryHover: '#B80016',
+    accentPrimarySoft: '#FDF2F3',
+    accentNavy: '#263640',
 
     // Borders & Dividers
-    borderSubtle: '#D7D8D6',
-    borderStrong: '#B8B9B7',
-    borderFocus: '#252525',
+    borderSubtle: '#D9DEE1',
+    borderStrong: '#B4BCC2',
+    borderFocus: '#263640',
 
     // Semantic Statuses
-    statusSuccessBg: '#EBF7F0',
-    statusSuccessText: '#008A52',
-    statusSuccessBorder: '#B7E1CD',
+    statusSuccessBg: '#ECF6F1',
+    statusSuccessText: '#27835B',
+    statusSuccessBorder: '#B7DFCC',
 
-    statusWarningBg: '#FEF7EC',
-    statusWarningText: '#9A4A06',
-    statusWarningBorder: '#FCD9A5',
+    statusWarningBg: '#FBF5EA',
+    statusWarningText: '#B77A1D',
+    statusWarningBorder: '#EBD3A7',
 
-    statusPendingBg: '#F3F4F6',
-    statusPendingText: '#252525',
-    statusPendingBorder: '#D1D5DB',
+    statusPendingBg: '#F4F5F6',
+    statusPendingText: '#252B30',
+    statusPendingBorder: '#D9DEE1',
 
-    statusDangerBg: '#FDF2F2',
-    statusDangerText: '#B0000D',
-    statusDangerBorder: '#F5C2C7',
+    statusDangerBg: '#FDF2F3',
+    statusDangerText: '#C83A42',
+    statusDangerBorder: '#F1C1C4',
 
-    statusNeutralBg: '#F4F4F4',
-    statusNeutralText: '#555555',
-    statusNeutralBorder: '#D7D8D6',
+    statusNeutralBg: '#F4F5F6',
+    statusNeutralText: '#68727A',
+    statusNeutralBorder: '#D9DEE1',
   },
 
   typography: {
@@ -64,6 +70,7 @@ export const DESIGN_TOKENS = {
       '3xl': { size: '2.125rem', lineHeight: '2.5rem' },
     },
     weights: {
+      light: 300,
       regular: 400,
       medium: 500,
       semibold: 600,
@@ -92,10 +99,10 @@ export const DESIGN_TOKENS = {
 
   elevation: {
     none: 'none',
-    xs: '0 1px 2px rgba(0, 0, 0, 0.04)',
-    sm: '0 1px 3px rgba(0, 0, 0, 0.08)',
-    md: '0 4px 12px rgba(0, 0, 0, 0.08)',
-    lg: '0 10px 25px rgba(0, 0, 0, 0.12)',
+    xs: '0 1px 2px rgba(32, 42, 48, 0.04)',
+    sm: '0 1px 3px rgba(32, 42, 48, 0.08)',
+    md: '0 4px 12px rgba(32, 42, 48, 0.08)',
+    lg: '0 10px 25px rgba(32, 42, 48, 0.14)',
   },
 
   iconSizes: {
@@ -108,15 +115,15 @@ export const DESIGN_TOKENS = {
 
   controls: {
     buttonHeightSm: '36px',
-    buttonHeightMd: '42px',
+    buttonHeightMd: '44px',
     buttonHeightLg: '48px',
     inputHeight: '44px',
     touchMinTarget: '44px',
   },
 
   navigation: {
-    sidebarWidth: '256px',
-    topBarHeight: '64px',
+    sidebarWidth: '248px',
+    topBarHeight: '44px',
     mobileBottomNavHeight: '64px',
     maxContentWidth: '1320px',
   },

@@ -2,45 +2,78 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   AlertTriangle,
   CheckCircle2,
-  Clock,
+  ChevronRight,
+  Download,
   Fingerprint,
+  HelpCircle,
+  ListChecks,
   ShieldCheck,
-  XCircle,
-  MessageSquare,
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { apiRequest } from '../lib/api';
 import { formatDateTime, formatFinancialCurrency } from '@shared/utils/formatters';
+import { GeometricHeader } from '../components/ui/GeometricHeader';
+import { BankingHeader } from '../components/ui/BankingHeader';
 import {
   Button,
   EmptyState,
   ErrorBanner,
   FormInput,
   NativeDialog,
-  SectionCard,
   SkeletonList,
   StatusBadge,
 } from '../components/ui/Primitives';
 import { parseRequestOptions, serializeCredential } from '../lib/webauthn';
+
+interface AuthCategoryDef {
+  id: string;
+  label: string;
+  matchCategories: string[];
+  countryRequired?: string;
+}
+
+const DOCUMENTED_CATEGORIES: AuthCategoryDef[] = [
+  { id: 'ACH', label: 'ACH', matchCategories: ['ACH_CREDIT', 'ACH_DEBIT', 'ACH'] },
+  { id: 'BILL_PAYMENT', label: 'Bill Payment', matchCategories: ['BILL_PAYMENT', 'BILL'] },
+  { id: 'SEPA', label: 'Eurozone-SEPA', matchCategories: ['SEPA_PAYMENT', 'EUROZONE_SEPA'] },
+  { id: 'FLA', label: 'Payment File - FLA', matchCategories: ['PAYMENT_FILE_FLA', 'FLA'] },
+  { id: 'ILA', label: 'Payment File - ILA', matchCategories: ['PAYMENT_FILE_ILA', 'ILA'] },
+  { id: 'PRIORITY', label: 'Priority', matchCategories: ['PRIORITY_PAYMENT', 'INTERNATIONAL_PAYMENT'] },
+  { id: 'ZENGIN', label: 'Priority Payment Zengin', matchCategories: ['PRIORITY_ZENGIN'], countryRequired: 'JP' },
+  { id: 'TRANSFER', label: 'Transfer', matchCategories: ['INTER_ACCOUNT_TRANSFER', 'TRANSFER'] },
+];
+
+type AuthLevel = 'OVERVIEW' | 'CATEGORY_LIST' | 'DETAIL' | 'ACK';
 
 export const AuthPage: React.FC = () => {
   const { activeOrg, hideBalances, hasPermission } = useAuth();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [instructions, setInstructions] = useState<any[]>([]);
-  const [tradeItems, setTradeItems] = useState<any[]>([]);
 
-  const [categoryFilter, setCategoryFilter] = useState('ALL');
-  const [tab, setTab] = useState<'PENDING' | 'RECENT' | 'REJECTED' | 'TRADE'>('PENDING');
+  const [level, setLevel] = useState<AuthLevel>('OVERVIEW');
+  const [statusTab, setStatusTab] = useState<'PENDING' | 'RECENT' | 'REJECTED'>('PENDING');
+  const [activeCategory, setActiveCategory] = useState<AuthCategoryDef | null>(null);
+  const [multiSelectMode, setMultiSelectMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [detailItem, setDetailItem] = useState<any | null>(null);
 
-  // Review & Step-Up Authentication Modal
-  const [reviewAction, setReviewAction] = useState<{ ids: string[]; decision: 'APPROVED' | 'REJECTED' | 'INFO_REQUESTED' } | null>(null);
+  // Step-Up Auth / Decision Modal
+  const [reviewAction, setReviewAction] = useState<{
+    ids: string[];
+    decision: 'APPROVED' | 'REJECTED' | 'SEND_TO_REPAIR';
+  } | null>(null);
   const [comment, setComment] = useState('');
   const [stepUpPin, setStepUpPin] = useState('');
   const [actionLoading, setActionLoading] = useState(false);
-  const [actionResult, setActionResult] = useState<{ success: boolean; message: string } | null>(null);
+  const [actionError, setActionError] = useState('');
+
+  // Acknowledgement Screen state (pay_auth.pdf p.4)
+  const [ackResult, setAckResult] = useState<{
+    decision: string;
+    items: any[];
+    timestamp: string;
+  } | null>(null);
 
   const loadAuthQueue = useCallback(async () => {
     if (!activeOrg) return;
@@ -49,7 +82,6 @@ export const AuthPage: React.FC = () => {
     try {
       const res = await apiRequest<any>(`/api/corporate/authorisations?orgId=${encodeURIComponent(activeOrg.id)}`);
       setInstructions(res.instructions || []);
-      setTradeItems(res.tradeItems || []);
       setSelectedIds([]);
     } catch (err: any) {
       setError(err?.message || 'Unable to load authorisations.');
@@ -62,31 +94,38 @@ export const AuthPage: React.FC = () => {
     loadAuthQueue();
   }, [loadAuthQueue]);
 
-  const pendingList = useMemo(
-    () => instructions.filter((i) => ['AWAITING_AUTHORISATION', 'PARTIALLY_AUTHORISED'].includes(i.status)),
-    [instructions]
-  );
-  const recentList = useMemo(
-    () => instructions.filter((i) => ['AUTHORISED', 'COMPLETED', 'PROCESSING', 'SENT'].includes(i.status)),
-    [instructions]
-  );
-  const rejectedList = useMemo(
-    () => instructions.filter((i) => i.status === 'REJECTED'),
-    [instructions]
-  );
-  const expiringCount = useMemo(
-    () =>
-      pendingList.filter((i) => i.expires_at && new Date(i.expires_at).getTime() - Date.now() < 12 * 3600 * 1000).length,
-    [pendingList]
-  );
+  const canApprove = hasPermission('APPROVE_PAYMENTS');
+  const canReject = hasPermission('REJECT_PAYMENTS');
 
-  const activeList = useMemo(() => {
-    const base = tab === 'PENDING' ? pendingList : tab === 'RECENT' ? recentList : rejectedList;
-    if (categoryFilter === 'ALL') return base;
-    return base.filter((i) => i.category === categoryFilter);
-  }, [tab, pendingList, recentList, rejectedList, categoryFilter]);
+  const scopedList = useMemo(() => {
+    if (statusTab === 'PENDING') {
+      return instructions.filter((i) => ['AWAITING_AUTHORISATION', 'PARTIALLY_AUTHORISED'].includes(i.status));
+    }
+    if (statusTab === 'RECENT') {
+      return instructions.filter((i) => ['AUTHORISED', 'COMPLETED', 'PROCESSING', 'SENT'].includes(i.status));
+    }
+    return instructions.filter((i) => ['REJECTED', 'REPAIR_REQUESTED'].includes(i.status));
+  }, [instructions, statusTab]);
 
-  const categories = useMemo(() => Array.from(new Set(instructions.map((i) => i.category))), [instructions]);
+  const visibleCategories = useMemo(() => {
+    return DOCUMENTED_CATEGORIES.filter((cat) => {
+      if (cat.countryRequired && activeOrg?.country !== cat.countryRequired) return false;
+      return true;
+    }).map((cat) => {
+      const items = scopedList.filter((i) => cat.matchCategories.includes(i.category));
+      return { ...cat, items };
+    });
+  }, [scopedList, activeOrg?.country]);
+
+  const categoryItems = useMemo(() => {
+    if (!activeCategory) return [];
+    return scopedList.filter((i) => activeCategory.matchCategories.includes(i.category));
+  }, [scopedList, activeCategory]);
+
+  const reviewItems = useMemo(
+    () => (reviewAction ? instructions.filter((i) => reviewAction.ids.includes(i.id)) : []),
+    [reviewAction, instructions]
+  );
 
   const toggleSelect = (id: string) => {
     setSelectedIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
@@ -95,10 +134,10 @@ export const AuthPage: React.FC = () => {
   const executeDecision = async (usePasskey = false) => {
     if (!reviewAction || !activeOrg) return;
     setActionLoading(true);
-    setActionResult(null);
+    setActionError('');
     try {
       let reauthToken: string | undefined;
-      if (usePasskey) {
+      if (reviewAction.decision === 'APPROVED' && usePasskey) {
         const opts = await apiRequest('/api/auth/webauthn/reauth/options', { method: 'POST' });
         const pk = parseRequestOptions(opts);
         const cred = (await navigator.credentials.get({ publicKey: pk })) as PublicKeyCredential | null;
@@ -110,6 +149,7 @@ export const AuthPage: React.FC = () => {
         reauthToken = ver.reauthToken;
       }
 
+      const itemsSnapshot = reviewItems;
       const res = await apiRequest<any>('/api/corporate/authorisations/decide', {
         method: 'POST',
         body: JSON.stringify({
@@ -123,464 +163,594 @@ export const AuthPage: React.FC = () => {
       });
 
       const okCount = (res.results || []).length;
-      const errMsg = (res.errors || []).map((e: any) => `${e.reference || e.id}: ${e.error}`).join('; ');
-      setActionResult({
-        success: okCount > 0,
-        message: `${okCount} instruction(s) updated.${errMsg ? ` Skipped/Rejected: ${errMsg}` : ''}`,
+      if (okCount === 0) {
+        const msg = (res.errors || []).map((e: any) => e.error).join('; ') || 'Authorisation update could not be applied.';
+        setActionError(msg);
+        return;
+      }
+
+      setAckResult({
+        decision: reviewAction.decision,
+        items: itemsSnapshot,
+        timestamp: new Date().toISOString(),
       });
+      setReviewAction(null);
       setStepUpPin('');
       setComment('');
+      setMultiSelectMode(false);
+      setLevel('ACK');
       await loadAuthQueue();
     } catch (err: any) {
-      setActionResult({ success: false, message: err?.message || 'Authorisation decision failed.' });
+      setActionError(err?.message || 'Authorisation decision failed.');
     } finally {
       setActionLoading(false);
     }
   };
 
-  const handleTradeDecision = async (tradeId: string, decision: 'APPROVED' | 'REJECTED') => {
-    if (!activeOrg) return;
-    try {
-      await apiRequest(`/api/corporate/trade/${tradeId}/decide`, {
-        method: 'POST',
-        body: JSON.stringify({ orgId: activeOrg.id, decision, comment: `${decision} from Auth Centre` }),
-      });
-      await loadAuthQueue();
-    } catch (err: any) {
-      setError(err?.message || 'Trade decision failed.');
-    }
+  const saveConfirmationRecord = () => {
+    if (!ackResult) return;
+    const html = `<!doctype html><html><head><title>HSBC Cnet Authorisation Confirmation</title>
+      <style>body{font-family:Inter,sans-serif;padding:32px;color:#252B30}table{width:100%;border-collapse:collapse;margin-top:16px}th,td{border-bottom:1px solid #D9DEE1;padding:8px;text-align:left;font-size:12px}</style></head>
+      <body><h2>Authorisation Confirmation — HSBC Cnet (Sandbox)</h2>
+      <p><strong>Decision:</strong> ${ackResult.decision}<br/><strong>Date:</strong> ${formatDateTime(ackResult.timestamp)}</p>
+      <table><thead><tr><th>Reference</th><th>Beneficiary</th><th>Amount</th></tr></thead><tbody>
+      ${ackResult.items.map((i) => `<tr><td>${i.reference}</td><td>${i.beneficiary_name}</td><td>${formatFinancialCurrency(i.amount, i.currency)}</td></tr>`).join('')}
+      </tbody></table></body></html>`;
+    const blob = new Blob([html], { type: 'text/html' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `HSBC_Cnet_Authorisation_${Date.now()}.html`;
+    a.click();
+    URL.revokeObjectURL(url);
   };
 
-  const canApprove = hasPermission('APPROVE_PAYMENTS');
-  const canReject = hasPermission('REJECT_PAYMENTS');
+  // =========================================================================
+  // LEVEL 4: ACKNOWLEDGEMENT SCREEN (pay_auth.pdf p.4)
+  // =========================================================================
+  if (level === 'ACK' && ackResult) {
+    const isApproved = ackResult.decision === 'APPROVED';
+    return (
+      <div className="bg-white md:border md:border-[#D9DEE1] min-h-[540px] flex flex-col justify-between">
+        <BankingHeader
+          title="Confirmation"
+          rightSlot={
+            <button type="button" onClick={saveConfirmationRecord} aria-label="Save confirmation PDF/HTML" className="p-2 text-[#263640]">
+              <Download className="w-4 h-4" aria-hidden="true" />
+            </button>
+          }
+        />
 
-  const reviewItems = useMemo(
-    () => (reviewAction ? instructions.filter((i) => reviewAction.ids.includes(i.id)) : []),
-    [reviewAction, instructions]
-  );
+        <div className="p-6 flex-1 flex flex-col justify-center items-center text-center max-w-md mx-auto">
+          <div className="w-12 h-12 rounded-full bg-[#ECF6F1] flex items-center justify-center mb-4">
+            <CheckCircle2 className="w-7 h-7 text-[#27835B]" strokeWidth={1.75} aria-hidden="true" />
+          </div>
+          <h1 className="text-lg font-medium text-[#252B30]">
+            {ackResult.items.length === 1
+              ? `Your payment instruction was ${isApproved ? 'successfully authorised' : ackResult.decision === 'REJECTED' ? 'rejected' : 'sent to repair'}`
+              : `Your ${ackResult.items.length} instructions were ${isApproved ? 'successfully authorised' : ackResult.decision.toLowerCase().replace(/_/g, ' ')}`}
+          </h1>
 
-  return (
-    <div className="space-y-5">
-      {/* Header & KPI Strip */}
-      <div className="bg-white border border-[#D7D8D6] rounded-[2px] p-4 sm:p-5">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <h1 className="text-xl font-semibold text-[#252525] tracking-tight">Payment Authorisations</h1>
-            <p className="text-xs text-[#767676] mt-0.5">
-              Backend-enforced maker-checker policy &amp; multi-level corporate approval queue for {activeOrg?.name}
-            </p>
-          </div>
-          {!canApprove && (
-            <span className="text-xs font-medium px-2.5 py-1 rounded bg-[#FEF7EC] border border-[#FCD9A5] text-[#9A4A06]">
-              View-Only Access (Approver permission required)
-            </span>
-          )}
-        </div>
-
-        <div className="mt-4 grid grid-cols-2 lg:grid-cols-4 gap-3">
-          <div className="p-3 rounded-[2px] bg-[#F4F4F4] border border-[#D7D8D6]">
-            <div className="text-[11px] text-[#767676] uppercase font-semibold">Pending Approvals</div>
-            <div className="text-xl font-bold text-[#252525] tabular-nums mt-1">{pendingList.length}</div>
-          </div>
-          <div className="p-3 rounded-[2px] bg-[#F4F4F4] border border-[#D7D8D6]">
-            <div className="text-[11px] text-[#767676] uppercase font-semibold">Expiring (&lt; 12h)</div>
-            <div className="text-xl font-bold text-[#DB0011] tabular-nums mt-1">{expiringCount}</div>
-          </div>
-          <div className="p-3 rounded-[2px] bg-[#F4F4F4] border border-[#D7D8D6]">
-            <div className="text-[11px] text-[#767676] uppercase font-semibold">Recently Authorised</div>
-            <div className="text-xl font-bold text-[#008A52] tabular-nums mt-1">{recentList.length}</div>
-          </div>
-          <div className="p-3 rounded-[2px] bg-[#F4F4F4] border border-[#D7D8D6]">
-            <div className="text-[11px] text-[#767676] uppercase font-semibold">Rejected</div>
-            <div className="text-xl font-bold text-[#B0000D] tabular-nums mt-1">{rejectedList.length}</div>
-          </div>
-        </div>
-      </div>
-
-      {error && <ErrorBanner message={error} onRetry={loadAuthQueue} />}
-
-      <SectionCard noPadding>
-        {/* Tabs & Category Filter */}
-        <div className="p-4 border-b border-[#D7D8D6] flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-          <div className="flex flex-wrap gap-1" role="tablist" aria-label="Authorisation categories">
-            {(
-              [
-                { id: 'PENDING', label: `Pending (${pendingList.length})` },
-                { id: 'RECENT', label: `Authorised (${recentList.length})` },
-                { id: 'REJECTED', label: `Rejected (${rejectedList.length})` },
-                ...(hasPermission('ACCESS_TRADE_FINANCE') ? [{ id: 'TRADE', label: `Trade (${tradeItems.filter((t) => t.status === 'AWAITING_AUTHORISATION').length})` }] : []),
-              ] as const
-            ).map((t) => (
-              <button
-                key={t.id}
-                role="tab"
-                aria-selected={tab === t.id}
-                onClick={() => setTab(t.id as any)}
-                className={`px-3 py-1.5 rounded-[2px] text-xs font-semibold transition-colors ${
-                  tab === t.id ? 'bg-[#252525] text-white' : 'text-[#555555] hover:bg-[#EBEBEB]'
-                }`}
-              >
-                {t.label}
-              </button>
+          <div className="w-full mt-6 divide-y divide-[#D9DEE1] border-y border-[#D9DEE1] text-left text-xs">
+            {ackResult.items.map((item) => (
+              <div key={item.id} className="py-3 flex justify-between items-center gap-3">
+                <div>
+                  <div className="font-medium text-[#252B30]">{item.beneficiary_name}</div>
+                  <div className="text-[#68727A] tabular-nums">{item.reference}</div>
+                </div>
+                <div className="font-semibold text-[#252B30] tabular-nums">
+                  {formatFinancialCurrency(item.amount, item.currency)}
+                </div>
+              </div>
             ))}
           </div>
-
-          {tab !== 'TRADE' && (
-            <select
-              aria-label="Filter by payment category"
-              value={categoryFilter}
-              onChange={(e) => setCategoryFilter(e.target.value)}
-              className="min-h-[38px] px-3 text-xs bg-white border border-[#9E9E9E] rounded-[2px]"
-            >
-              <option value="ALL">All Payment Categories</option>
-              {categories.map((c) => (
-                <option key={c} value={c}>
-                  {c.replace(/_/g, ' ')}
-                </option>
-              ))}
-            </select>
-          )}
         </div>
 
-        {/* Bulk Action Bar */}
-        {tab === 'PENDING' && selectedIds.length > 0 && (
-          <div className="px-4 py-2.5 bg-[#F4F4F4] border-b border-[#D7D8D6] flex flex-wrap items-center justify-between gap-2">
-            <span className="text-xs font-semibold text-[#252525]">{selectedIds.length} instruction(s) selected</span>
-            <div className="flex items-center gap-2">
+        <div className="p-4 border-t border-[#D9DEE1] space-y-2.5">
+          <Button
+            fullWidth
+            onClick={() => {
+              setAckResult(null);
+              setDetailItem(null);
+              setLevel(activeCategory ? 'CATEGORY_LIST' : 'OVERVIEW');
+            }}
+          >
+            Back to {activeCategory?.label || 'Authorisations'}
+          </Button>
+          <Button fullWidth variant="outline" onClick={saveConfirmationRecord}>
+            Save instruction details
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
+  // =========================================================================
+  // LEVEL 3: AUTHORISATION DETAIL SCREEN (pay_auth.pdf p.3 — clean populated fields)
+  // =========================================================================
+  if (level === 'DETAIL' && detailItem) {
+    const fields: { label: string; value: React.ReactNode }[] = [
+      { label: 'Status', value: <StatusBadge status={detailItem.status} /> },
+      { label: 'Instruction reference number', value: <span className="tabular-nums">{detailItem.reference}</span> },
+      { label: 'Payment system', value: detailItem.category.replace(/_/g, ' ') },
+      ...(detailItem.reference_note ? [{ label: 'Your reference', value: detailItem.reference_note }] : []),
+      { label: 'Debit account', value: `${detailItem.debit_account_name} (${detailItem.debit_currency})` },
+      { label: 'Beneficiary', value: detailItem.beneficiary_name },
+      ...(detailItem.beneficiary_account ? [{ label: 'Beneficiary account', value: <span className="tabular-nums">{detailItem.beneficiary_account}</span> }] : []),
+      ...(detailItem.beneficiary_bank ? [{ label: 'Beneficiary bank', value: `${detailItem.beneficiary_bank} (${detailItem.destination_country})` }] : []),
+      ...(detailItem.swift_bic ? [{ label: 'SWIFT / BIC', value: detailItem.swift_bic }] : []),
+      ...(detailItem.exchange_rate && detailItem.exchange_rate !== 1 ? [{ label: 'Exchange rate', value: `1 ${detailItem.debit_currency} = ${detailItem.exchange_rate} ${detailItem.currency}` }] : []),
+      ...(detailItem.payment_purpose ? [{ label: 'Payment purpose', value: detailItem.payment_purpose }] : []),
+      ...(detailItem.charges_bearer ? [{ label: 'Charges', value: detailItem.charges_bearer }] : []),
+      { label: 'Initiated by', value: `${detailItem.initiator_name} • ${formatDateTime(detailItem.created_at)}` },
+      { label: 'Approvals recorded', value: `${detailItem.current_approvals} of ${detailItem.required_approvals}` },
+    ];
+
+    const isPending = ['AWAITING_AUTHORISATION', 'PARTIALLY_AUTHORISED'].includes(detailItem.status);
+
+    return (
+      <div className="bg-white md:border md:border-[#D9DEE1]">
+        <BankingHeader
+          title={activeCategory?.label || 'Payment Details'}
+          onBack={() => {
+            setDetailItem(null);
+            setLevel('CATEGORY_LIST');
+          }}
+          rightSlot={
+            <button type="button" aria-label="Authorisation guidance" className="p-2 text-[#68727A]">
+              <HelpCircle className="w-4 h-4" />
+            </button>
+          }
+        />
+
+        {/* Hero Payee & Amount Summary Row */}
+        <div className="px-4 py-4 border-b border-[#D9DEE1] flex items-start justify-between gap-3">
+          <div>
+            <div className="text-sm font-medium text-[#252B30]">{detailItem.beneficiary_name}</div>
+            <div className="text-xs text-[#68727A] mt-0.5">{detailItem.destination_country}</div>
+          </div>
+          <div className="text-right">
+            <div className="text-lg font-semibold text-[#252B30] tabular-nums">
+              {formatFinancialCurrency(detailItem.amount, detailItem.currency, hideBalances)}
+            </div>
+          </div>
+        </div>
+
+        {detailItem.unusualFlags?.length > 0 && (
+          <div className="px-4 py-2.5 bg-[#FBF5EA] border-b border-[#EBD3A7] text-xs text-[#B77A1D] flex items-center gap-2">
+            <AlertTriangle className="w-4 h-4 shrink-0" aria-hidden="true" />
+            <span>{detailItem.unusualFlags.join(' • ')}</span>
+          </div>
+        )}
+
+        {/* Populated-Only Fields */}
+        <dl className="divide-y divide-[#D9DEE1] text-xs">
+          {fields.map((f) => (
+            <div key={f.label} className="px-4 py-3 flex items-center justify-between gap-4">
+              <dt className="text-[#68727A] shrink-0">{f.label}</dt>
+              <dd className="text-right font-medium text-[#252B30]">{f.value}</dd>
+            </div>
+          ))}
+        </dl>
+
+        {detailItem.approvalHistory?.length > 0 && (
+          <div className="p-4 bg-[#F4F5F6] border-t border-[#D9DEE1] text-xs">
+            <div className="font-semibold text-[#68727A] uppercase tracking-wider text-[11px] mb-2">Approval History</div>
+            <div className="space-y-2">
+              {detailItem.approvalHistory.map((h: any, idx: number) => (
+                <div key={idx} className="p-2.5 bg-white border border-[#D9DEE1] flex justify-between gap-2">
+                  <div>
+                    <span className="font-medium text-[#252B30]">{h.approverName}</span> ({h.decision})
+                    {h.comment && <div className="text-[#68727A] mt-0.5">{h.comment}</div>}
+                  </div>
+                  <span className="text-[#68727A]">{formatDateTime(h.timestamp)}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Bottom Fixed-Style Action Buttons matching pay_auth.pdf p.3 */}
+        {isPending && (
+          <div className="p-4 border-t border-[#D9DEE1] space-y-2.5 bg-white">
+            <Button
+              fullWidth
+              size="lg"
+              disabled={!detailItem.canCurrentUserApprove}
+              onClick={() => {
+                setActionError('');
+                setReviewAction({ ids: [detailItem.id], decision: 'APPROVED' });
+              }}
+            >
+              {detailItem.canCurrentUserApprove ? 'Authorise' : 'Maker-Checker Restricted / Already Signed'}
+            </Button>
+            {(canReject || canApprove) && (
+              <div className="grid grid-cols-2 gap-2.5">
+                <Button
+                  variant="outline"
+                  disabled={!canReject}
+                  onClick={() => {
+                    setActionError('');
+                    setReviewAction({ ids: [detailItem.id], decision: 'REJECTED' });
+                  }}
+                >
+                  Reject
+                </Button>
+                <Button
+                  variant="outline"
+                  disabled={!canReject && !canApprove}
+                  onClick={() => {
+                    setActionError('');
+                    setReviewAction({ ids: [detailItem.id], decision: 'SEND_TO_REPAIR' });
+                  }}
+                >
+                  Send to repair
+                </Button>
+              </div>
+            )}
+          </div>
+        )}
+
+        <StepUpDecisionDialog
+          reviewAction={reviewAction}
+          onClose={() => setReviewAction(null)}
+          reviewItems={reviewItems}
+          comment={comment}
+          setComment={setComment}
+          stepUpPin={stepUpPin}
+          setStepUpPin={setStepUpPin}
+          actionLoading={actionLoading}
+          actionError={actionError}
+          executeDecision={executeDecision}
+        />
+      </div>
+    );
+  }
+
+  // =========================================================================
+  // LEVEL 2: CATEGORY INSTRUCTION LIST (pay_auth.pdf p.2)
+  // =========================================================================
+  if (level === 'CATEGORY_LIST' && activeCategory) {
+    return (
+      <div className="bg-white md:border md:border-[#D9DEE1]">
+        <BankingHeader
+          title={activeCategory.label}
+          onBack={() => {
+            setActiveCategory(null);
+            setMultiSelectMode(false);
+            setSelectedIds([]);
+            setLevel('OVERVIEW');
+          }}
+          rightSlot={
+            statusTab === 'PENDING' && canApprove && categoryItems.length > 0 ? (
+              <button
+                type="button"
+                onClick={() => {
+                  setMultiSelectMode((m) => !m);
+                  setSelectedIds([]);
+                }}
+                className="px-2.5 py-1.5 text-xs font-medium text-[#263640] hover:bg-[#F4F5F6] flex items-center gap-1.5"
+              >
+                <ListChecks className="w-4 h-4" />
+                <span>{multiSelectMode ? 'Done' : 'Multi-select'}</span>
+              </button>
+            ) : null
+          }
+        />
+
+        {categoryItems.length === 0 ? (
+          <EmptyState
+            title={`No ${activeCategory.label} instructions`}
+            description="There are no instructions in this payment category for the selected status."
+          />
+        ) : (
+          <div className="divide-y divide-[#D9DEE1]">
+            {categoryItems.map((item) => {
+              const checked = selectedIds.includes(item.id);
+              return (
+                <div
+                  key={item.id}
+                  className="px-4 py-3.5 flex items-start justify-between gap-3 hover:bg-[#F4F5F6]"
+                >
+                  <div className="flex items-start gap-3 min-w-0 flex-1">
+                    {(multiSelectMode || statusTab === 'PENDING') && item.canCurrentUserApprove && (
+                      <input
+                        type="checkbox"
+                        aria-label={`Select ${item.reference}`}
+                        checked={checked}
+                        onChange={() => toggleSelect(item.id)}
+                        className="mt-1 w-4 h-4 accent-[#DB001B]"
+                      />
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setDetailItem(item);
+                        setLevel('DETAIL');
+                      }}
+                      className="flex-1 text-left min-w-0"
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="font-medium text-sm text-[#252B30] truncate">{item.beneficiary_name}</div>
+                        <div className="text-sm font-semibold text-[#252B30] tabular-nums shrink-0">
+                          {formatFinancialCurrency(item.amount, item.currency, hideBalances)}
+                        </div>
+                      </div>
+                      <dl className="mt-2 space-y-1 text-xs">
+                        <div className="flex justify-between gap-2">
+                          <dt className="text-[#68727A]">Status</dt>
+                          <dd className="text-[#252B30] font-medium">
+                            {item.status.replace(/_/g, ' ')} ({item.current_approvals}/{item.required_approvals})
+                          </dd>
+                        </div>
+                        <div className="flex justify-between gap-2">
+                          <dt className="text-[#68727A]">Reference</dt>
+                          <dd className="text-[#252B30] tabular-nums">{item.reference}</dd>
+                        </div>
+                        <div className="flex justify-between gap-2">
+                          <dt className="text-[#68727A]">Debit account</dt>
+                          <dd className="text-[#68727A] truncate">{item.debit_account_name}</dd>
+                        </div>
+                      </dl>
+                    </button>
+                  </div>
+                  <ChevronRight className="w-4 h-4 text-[#68727A] mt-1 shrink-0" aria-hidden="true" />
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        {selectedIds.length > 0 && statusTab === 'PENDING' && (
+          <div className="p-4 border-t border-[#D9DEE1] bg-[#F4F5F6] space-y-2">
+            <div className="text-xs font-medium text-[#252B30]">{selectedIds.length} instruction(s) selected</div>
+            <div className="grid grid-cols-3 gap-2">
               {canApprove && (
                 <Button
                   size="sm"
                   onClick={() => {
-                    setActionResult(null);
+                    setActionError('');
                     setReviewAction({ ids: selectedIds, decision: 'APPROVED' });
                   }}
                 >
-                  Bulk Authorise
+                  Authorise
                 </Button>
               )}
               {canReject && (
-                <Button
-                  size="sm"
-                  variant="danger"
-                  onClick={() => {
-                    setActionResult(null);
-                    setReviewAction({ ids: selectedIds, decision: 'REJECTED' });
-                  }}
-                >
-                  Bulk Reject
-                </Button>
+                <>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => {
+                      setActionError('');
+                      setReviewAction({ ids: selectedIds, decision: 'REJECTED' });
+                    }}
+                  >
+                    Reject
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => {
+                      setActionError('');
+                      setReviewAction({ ids: selectedIds, decision: 'SEND_TO_REPAIR' });
+                    }}
+                  >
+                    Send to repair
+                  </Button>
+                </>
               )}
             </div>
           </div>
         )}
 
+        <StepUpDecisionDialog
+          reviewAction={reviewAction}
+          onClose={() => setReviewAction(null)}
+          reviewItems={reviewItems}
+          comment={comment}
+          setComment={setComment}
+          stepUpPin={stepUpPin}
+          setStepUpPin={setStepUpPin}
+          actionLoading={actionLoading}
+          actionError={actionError}
+          executeDecision={executeDecision}
+        />
+      </div>
+    );
+  }
+
+  // =========================================================================
+  // LEVEL 1: COMPANY OVERVIEW (pay_auth.pdf p.1 exact structure)
+  // =========================================================================
+  return (
+    <div className="bg-white md:border md:border-[#D9DEE1]">
+      <GeometricHeader title="Authorisations" subtitle={activeOrg?.name} />
+
+      {/* Status Filter Bar */}
+      <div className="grid grid-cols-3 border-b border-[#D9DEE1] bg-white text-xs font-medium" role="tablist">
+        {(
+          [
+            { id: 'PENDING', label: 'Pending' },
+            { id: 'RECENT', label: 'Authorised' },
+            { id: 'REJECTED', label: 'Rejected / Repair' },
+          ] as const
+        ).map((t) => (
+          <button
+            key={t.id}
+            role="tab"
+            aria-selected={statusTab === t.id}
+            onClick={() => setStatusTab(t.id)}
+            className={`py-3 text-center border-b-[2px] ${
+              statusTab === t.id ? 'border-[#DB001B] text-[#252B30] font-semibold' : 'border-transparent text-[#68727A]'
+            }`}
+          >
+            {t.label}
+          </button>
+        ))}
+      </div>
+
+      {error && (
         <div className="p-4">
-          {loading ? (
-            <SkeletonList rows={4} />
-          ) : tab === 'TRADE' ? (
-            tradeItems.length === 0 ? (
-              <EmptyState title="No trade authorisations" description="No documentary credits or trade instructions pending." />
-            ) : (
-              <div className="divide-y divide-[#D7D8D6]">
-                {tradeItems.map((tr) => (
-                  <div key={tr.id} className="py-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <span className="text-sm font-semibold text-[#252525]">{tr.counterparty}</span>
-                        <StatusBadge status={tr.status} />
-                      </div>
-                      <div className="text-xs text-[#767676] mt-0.5">
-                        {tr.reference} • {tr.trade_category.replace(/_/g, ' ')} • {tr.pending_action}
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-3">
-                      <span className="text-sm font-bold text-[#252525] tabular-nums">
-                        {formatFinancialCurrency(tr.amount, tr.currency, hideBalances)}
-                      </span>
-                      {tr.status === 'AWAITING_AUTHORISATION' && canApprove && (
-                        <>
-                          <Button size="sm" onClick={() => handleTradeDecision(tr.id, 'APPROVED')}>
-                            Authorise
-                          </Button>
-                          <Button size="sm" variant="danger" onClick={() => handleTradeDecision(tr.id, 'REJECTED')}>
-                            Reject
-                          </Button>
-                        </>
-                      )}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )
-          ) : activeList.length === 0 ? (
-            <EmptyState
-              title="No instructions in this view"
-              description="There are no payment authorisations matching the current status or category."
-            />
-          ) : (
-            <div className="divide-y divide-[#D7D8D6]">
-              {activeList.map((item) => {
-                const checked = selectedIds.includes(item.id);
-                const isExpiring = item.expires_at && new Date(item.expires_at).getTime() - Date.now() < 12 * 3600 * 1000;
-                return (
-                  <div key={item.id} className="py-3.5 flex flex-col lg:flex-row lg:items-center justify-between gap-3">
-                    <div className="flex items-start gap-3">
-                      {tab === 'PENDING' && item.canCurrentUserApprove && (
-                        <input
-                          type="checkbox"
-                          aria-label={`Select ${item.reference}`}
-                          checked={checked}
-                          onChange={() => toggleSelect(item.id)}
-                          className="mt-1 w-4 h-4 accent-[#DB0011]"
-                        />
-                      )}
-                      <div>
-                        <div className="flex flex-wrap items-center gap-2">
-                          <span className="text-sm font-semibold text-[#252525]">{item.beneficiary_name}</span>
-                          <StatusBadge status={item.status} />
-                          {isExpiring && tab === 'PENDING' && (
-                            <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-[#9A4A06] bg-[#FEF7EC] border border-[#FCD9A5] px-1.5 py-0.5 rounded">
-                              <Clock className="w-3 h-3" /> Expiring Soon
-                            </span>
-                          )}
-                        </div>
-                        <div className="text-xs text-[#767676] mt-1">
-                          {item.reference} • {item.category.replace(/_/g, ' ')} • Initiator: {item.initiator_name} • Approvals:{' '}
-                          <strong className="text-[#252525]">
-                            {item.current_approvals}/{item.required_approvals}
-                          </strong>
-                        </div>
-                        {item.unusualFlags?.length > 0 && (
-                          <div className="mt-1.5 flex items-center gap-1.5 text-[11px] text-[#9A4A06] font-medium">
-                            <AlertTriangle className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
-                            <span>{item.unusualFlags.join(' • ')}</span>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-
-                    <div className="flex flex-wrap items-center justify-between lg:justify-end gap-2.5 pl-7 lg:pl-0">
-                      <div className="text-left lg:text-right mr-2">
-                        <div className="text-sm font-bold text-[#252525] tabular-nums">
-                          {formatFinancialCurrency(item.amount, item.currency, hideBalances)}
-                        </div>
-                        <div className="text-[11px] text-[#767676]">{item.debit_account_name}</div>
-                      </div>
-
-                      <Button size="sm" variant="outline" onClick={() => setDetailItem(item)}>
-                        View Details
-                      </Button>
-
-                      {tab === 'PENDING' && canApprove && (
-                        <Button
-                          size="sm"
-                          disabled={!item.canCurrentUserApprove}
-                          onClick={() => {
-                            setActionResult(null);
-                            setReviewAction({ ids: [item.id], decision: 'APPROVED' });
-                          }}
-                        >
-                          {item.canCurrentUserApprove ? 'Authorise' : 'Maker/Approved'}
-                        </Button>
-                      )}
-                      {tab === 'PENDING' && canReject && (
-                        <Button
-                          size="sm"
-                          variant="danger"
-                          onClick={() => {
-                            setActionResult(null);
-                            setReviewAction({ ids: [item.id], decision: 'REJECTED' });
-                          }}
-                        >
-                          Reject
-                        </Button>
-                      )}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          )}
+          <ErrorBanner message={error} onRetry={loadAuthQueue} />
         </div>
-      </SectionCard>
+      )}
 
-      {/* Instruction Details Dialog */}
-      <NativeDialog
-        open={!!detailItem}
-        onClose={() => setDetailItem(null)}
-        title="Authorisation Instruction Details"
-        subtitle={detailItem?.reference}
-      >
-        {detailItem && (
-          <div className="space-y-4 text-xs">
-            <dl className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-3.5 bg-[#F4F4F4] rounded-[2px] border border-[#D7D8D6]">
-              <div>
-                <dt className="text-[#767676]">Beneficiary</dt>
-                <dd className="font-semibold text-[#252525] mt-0.5">{detailItem.beneficiary_name}</dd>
-                <dd className="text-[#767676] tabular-nums">{detailItem.beneficiary_account}</dd>
-              </div>
-              <div>
-                <dt className="text-[#767676]">Amount &amp; FX</dt>
-                <dd className="font-bold text-[#252525] text-sm tabular-nums mt-0.5">
-                  {formatFinancialCurrency(detailItem.amount, detailItem.currency, hideBalances)}
-                </dd>
-                <dd className="text-[#767676]">Rate: {detailItem.exchange_rate} • Charges: {detailItem.charges_bearer}</dd>
-              </div>
-              <div>
-                <dt className="text-[#767676]">Debit Account</dt>
-                <dd className="font-medium text-[#252525] mt-0.5">{detailItem.debit_account_name} ({detailItem.debit_currency})</dd>
-              </div>
-              <div>
-                <dt className="text-[#767676]">Destination Bank</dt>
-                <dd className="font-medium text-[#252525] mt-0.5">{detailItem.beneficiary_bank} ({detailItem.destination_country})</dd>
-                <dd className="text-[#767676]">SWIFT: {detailItem.swift_bic || 'N/A'}</dd>
-              </div>
-              <div>
-                <dt className="text-[#767676]">Initiator &amp; Purpose</dt>
-                <dd className="font-medium text-[#252525] mt-0.5">{detailItem.initiator_name} • {detailItem.payment_purpose}</dd>
-              </div>
-              <div>
-                <dt className="text-[#767676]">Created</dt>
-                <dd className="font-medium text-[#252525] mt-0.5">{formatDateTime(detailItem.created_at)}</dd>
-              </div>
-              <div className="sm:col-span-2">
-                <dt className="text-[#767676]">Reference Note</dt>
-                <dd className="font-medium text-[#252525] mt-0.5">{detailItem.reference_note}</dd>
-              </div>
-            </dl>
-
-            <div>
-              <h3 className="font-semibold text-[#252525] mb-2">Approval History ({detailItem.current_approvals}/{detailItem.required_approvals})</h3>
-              {detailItem.approvalHistory?.length === 0 ? (
-                <p className="text-[#767676]">No approvals recorded yet.</p>
-              ) : (
-                <ul className="space-y-2">
-                  {detailItem.approvalHistory.map((h: any, idx: number) => (
-                    <li key={idx} className="p-2.5 rounded border border-[#D7D8D6] flex justify-between gap-2">
-                      <div>
-                        <span className="font-semibold text-[#252525]">{h.approverName}</span> ({h.approverRole}) — {h.decision}
-                        {h.comment && <div className="text-[#767676] mt-0.5">{h.comment}</div>}
-                      </div>
-                      <span className="text-[#767676] shrink-0">{formatDateTime(h.timestamp)}</span>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </div>
-
-            {['AWAITING_AUTHORISATION', 'PARTIALLY_AUTHORISED'].includes(detailItem.status) && canApprove && (
-              <div className="flex flex-wrap gap-2 pt-2 border-t border-[#D7D8D6]">
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() => {
-                    const id = detailItem.id;
-                    setDetailItem(null);
-                    setActionResult(null);
-                    setReviewAction({ ids: [id], decision: 'INFO_REQUESTED' });
-                  }}
-                >
-                  <MessageSquare className="w-3.5 h-3.5" />
-                  Request Information
-                </Button>
-              </div>
-            )}
-          </div>
+      <div className="px-4 py-2.5 bg-[#F4F5F6] border-b border-[#D9DEE1] flex items-center justify-between">
+        <span className="text-xs font-medium text-[#252B30]">Company overview</span>
+        {!canApprove && (
+          <span className="text-[11px] text-[#B77A1D] font-medium">View-Only Role</span>
         )}
-      </NativeDialog>
+      </div>
 
-      {/* Mandatory Review + Step-Up Re-Authentication Modal */}
-      <NativeDialog
-        open={!!reviewAction}
-        onClose={() => setReviewAction(null)}
-        title={
-          reviewAction?.decision === 'APPROVED'
-            ? 'Review & Authorise Payment(s)'
-            : reviewAction?.decision === 'REJECTED'
-            ? 'Confirm Payment Rejection'
-            : 'Request Supporting Information'
-        }
-        subtitle="Verify exact beneficiaries and amounts before recording your decision."
-      >
-        {reviewAction && (
-          <div className="space-y-4 text-xs">
-            <div className="divide-y divide-[#D7D8D6] border border-[#D7D8D6] rounded-[2px]">
-              {reviewItems.map((item) => (
-                <div key={item.id} className="p-3 flex items-center justify-between gap-3">
-                  <div>
-                    <div className="font-semibold text-[#252525]">{item.beneficiary_name}</div>
-                    <div className="text-[#767676]">{item.reference} • {item.beneficiary_bank}</div>
-                    {item.unusualFlags?.length > 0 && (
-                      <div className="text-[#9A4A06] font-medium mt-0.5">{item.unusualFlags[0]}</div>
-                    )}
-                  </div>
-                  <div className="font-bold text-sm text-[#252525] tabular-nums">
-                    {formatFinancialCurrency(item.amount, item.currency)}
-                  </div>
-                </div>
-              ))}
-            </div>
+      {loading ? (
+        <SkeletonList rows={6} />
+      ) : (
+        <div className="divide-y divide-[#D9DEE1]">
+          {visibleCategories.map((cat) => {
+            const count = cat.items.length;
+            const actionableCount = cat.items.filter((i) => i.canCurrentUserApprove).length;
+            const highlightRed = statusTab === 'PENDING' && actionableCount > 0;
 
-            <FormInput
-              label="Decision Note / Audit Comment"
-              placeholder={reviewAction.decision === 'REJECTED' ? 'Specify rejection reason' : 'Optional audit note'}
-              value={comment}
-              onChange={(e) => setComment(e.target.value)}
-            />
-
-            {reviewAction.decision === 'APPROVED' && (
-              <div className="p-3.5 rounded-[2px] bg-[#F4F4F4] border border-[#D7D8D6] space-y-3">
-                <div className="flex items-center gap-2 font-semibold text-[#252525]">
-                  <ShieldCheck className="w-4 h-4 text-[#DB0011]" aria-hidden="true" />
-                  <span>Step-Up Re-Authentication Required</span>
-                </div>
-                <FormInput
-                  label="6-Digit Mobile Security PIN"
-                  type="password"
-                  inputMode="numeric"
-                  maxLength={6}
-                  placeholder="Enter 6-digit PIN"
-                  value={stepUpPin}
-                  onChange={(e) => setStepUpPin(e.target.value.replace(/\D/g, '').slice(0, 6))}
-                />
-              </div>
-            )}
-
-            {actionResult && (
-              <div
-                role="status"
-                className={`p-3 rounded-[2px] border flex items-center gap-2 ${
-                  actionResult.success
-                    ? 'bg-[#EBF7F0] border-[#B7E1CD] text-[#008A52]'
-                    : 'bg-[#FDF2F2] border-[#F5C2C7] text-[#B0000D]'
-                }`}
+            return (
+              <button
+                key={cat.id}
+                type="button"
+                onClick={() => {
+                  setActiveCategory(cat);
+                  setLevel('CATEGORY_LIST');
+                }}
+                className="w-full px-4 py-3.5 flex items-center justify-between hover:bg-[#F4F5F6] text-left transition-colors"
               >
-                {actionResult.success ? <CheckCircle2 className="w-4 h-4 shrink-0" /> : <XCircle className="w-4 h-4 shrink-0" />}
-                <span>{actionResult.message}</span>
-              </div>
-            )}
+                <span className="text-sm text-[#252B30]">{cat.label}</span>
+                <span className="flex items-center gap-2">
+                  <span
+                    className={`text-sm tabular-nums ${
+                      highlightRed ? 'font-semibold text-[#DB001B]' : 'font-normal text-[#68727A]'
+                    }`}
+                  >
+                    {count}
+                  </span>
+                  <ChevronRight className="w-4 h-4 text-[#68727A]" aria-hidden="true" />
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      )}
 
-            <div className="flex flex-wrap justify-end gap-2 pt-2">
-              <Button variant="outline" onClick={() => setReviewAction(null)}>
-                Close
-              </Button>
-              {reviewAction.decision === 'APPROVED' && typeof window !== 'undefined' && !!window.PublicKeyCredential && (
-                <Button variant="secondary" loading={actionLoading} onClick={() => executeDecision(true)}>
-                  <Fingerprint className="w-4 h-4" />
-                  Verify via Passkey
-                </Button>
-              )}
-              <Button
-                variant={reviewAction.decision === 'REJECTED' ? 'danger' : 'primary'}
-                loading={actionLoading}
-                onClick={() => executeDecision(false)}
-              >
-                Confirm {reviewAction.decision === 'APPROVED' ? 'Authorisation' : reviewAction.decision === 'REJECTED' ? 'Rejection' : 'Request'}
-              </Button>
-            </div>
-          </div>
-        )}
-      </NativeDialog>
+      <div className="p-4 bg-[#F4F5F6] border-t border-[#D9DEE1] text-xs text-[#68727A] leading-relaxed">
+        Please note: this is a summary of all outstanding authorisations across your business. Tap on a payment type to view all authorisations that require actions from you.
+      </div>
     </div>
   );
 };
+
+const StepUpDecisionDialog: React.FC<{
+  reviewAction: { ids: string[]; decision: 'APPROVED' | 'REJECTED' | 'SEND_TO_REPAIR' } | null;
+  onClose: () => void;
+  reviewItems: any[];
+  comment: string;
+  setComment: (v: string) => void;
+  stepUpPin: string;
+  setStepUpPin: (v: string) => void;
+  actionLoading: boolean;
+  actionError: string;
+  executeDecision: (usePasskey?: boolean) => void;
+}> = ({
+  reviewAction,
+  onClose,
+  reviewItems,
+  comment,
+  setComment,
+  stepUpPin,
+  setStepUpPin,
+  actionLoading,
+  actionError,
+  executeDecision,
+}) => (
+  <NativeDialog
+    open={!!reviewAction}
+    onClose={onClose}
+    title={
+      reviewAction?.decision === 'APPROVED'
+        ? 'Re-authenticate & Authorise'
+        : reviewAction?.decision === 'REJECTED'
+        ? 'Confirm Payment Rejection'
+        : 'Send Instruction to Repair'
+    }
+    subtitle="Review exact beneficiaries and amounts before confirming."
+  >
+    {reviewAction && (
+      <div className="space-y-4 text-xs">
+        <div className="divide-y divide-[#D9DEE1] border border-[#D9DEE1]">
+          {reviewItems.map((item) => (
+            <div key={item.id} className="p-3 flex items-center justify-between gap-3">
+              <div>
+                <div className="font-medium text-[#252B30]">{item.beneficiary_name}</div>
+                <div className="text-[#68727A]">{item.reference}</div>
+              </div>
+              <div className="font-semibold text-[#252B30] tabular-nums">
+                {formatFinancialCurrency(item.amount, item.currency)}
+              </div>
+            </div>
+          ))}
+        </div>
+
+        <FormInput
+          label={reviewAction.decision === 'SEND_TO_REPAIR' ? 'Repair Note' : 'Comment / Reason'}
+          placeholder={reviewAction.decision === 'REJECTED' ? 'Specify rejection reason' : 'Optional note for initiator'}
+          value={comment}
+          onChange={(e) => setComment(e.target.value)}
+        />
+
+        {reviewAction.decision === 'APPROVED' && (
+          <div className="p-3.5 bg-[#F4F5F6] border border-[#D9DEE1] space-y-3">
+            <div className="flex items-center gap-2 font-medium text-[#252B30]">
+              <ShieldCheck className="w-4 h-4 text-[#DB001B]" aria-hidden="true" />
+              <span>Step-Up Authentication Required</span>
+            </div>
+            <FormInput
+              label="6-Digit Mobile Security PIN"
+              type="password"
+              inputMode="numeric"
+              maxLength={6}
+              placeholder="Enter 6-digit PIN"
+              value={stepUpPin}
+              onChange={(e) => setStepUpPin(e.target.value.replace(/\D/g, '').slice(0, 6))}
+            />
+          </div>
+        )}
+
+        {actionError && (
+          <div role="alert" className="p-3 bg-[#FDF2F3] border-l-4 border-[#C83A42] text-[#C83A42]">
+            {actionError}
+          </div>
+        )}
+
+        <div className="flex flex-wrap justify-end gap-2 pt-2">
+          <Button variant="outline" onClick={onClose}>
+            Cancel
+          </Button>
+          {reviewAction.decision === 'APPROVED' && typeof window !== 'undefined' && !!window.PublicKeyCredential && (
+            <Button variant="secondary" loading={actionLoading} onClick={() => executeDecision(true)}>
+              <Fingerprint className="w-4 h-4" />
+              Verify with Biometrics
+            </Button>
+          )}
+          <Button
+            variant={reviewAction.decision === 'REJECTED' ? 'danger' : 'primary'}
+            loading={actionLoading}
+            onClick={() => executeDecision(false)}
+          >
+            {reviewAction.decision === 'APPROVED'
+              ? 'Continue & Authorise'
+              : reviewAction.decision === 'REJECTED'
+              ? 'Confirm Rejection'
+              : 'Send to repair'}
+          </Button>
+        </div>
+      </div>
+    )}
+  </NativeDialog>
+);

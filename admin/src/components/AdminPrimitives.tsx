@@ -2,11 +2,14 @@ import React, { useEffect, useId, useRef } from 'react';
 import { AlertCircle, CheckCircle2, Clock, Loader2, X, XCircle } from 'lucide-react';
 
 export const AdminBrandMark: React.FC<{ size?: number }> = ({ size = 30 }) => (
-  <svg width={size} height={size} viewBox="0 0 40 40" fill="none" role="img" aria-label="MeridianNet Admin emblem">
-    <rect x="2" y="2" width="36" height="36" rx="6" fill="#FFFFFF" />
-    <path d="M10 28V12H14.5L20 20.5L25.5 12H30V28H26V18.5L20 27.5L14 18.5V28H10Z" fill="#14233C" />
-    <rect x="26" y="8" width="6" height="6" rx="1" fill="#C8102E" />
-  </svg>
+  <img
+    src="/logo.jpg"
+    alt="HSBCnet Admin logo"
+    width={size}
+    height={size}
+    style={{ width: size, height: size }}
+    className="object-cover rounded-[2px] shrink-0 select-none"
+  />
 );
 
 export const AdminButton: React.FC<

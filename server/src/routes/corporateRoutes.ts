@@ -289,7 +289,7 @@ corporateRouter.post('/authorisations/decide', authenticateToken, (req: AuthRequ
     res.status(400).json({ success: false, error: 'Select at least one instruction.' });
     return;
   }
-  if (!['APPROVED', 'REJECTED', 'INFO_REQUESTED'].includes(decision)) {
+  if (!['APPROVED', 'REJECTED', 'INFO_REQUESTED', 'SEND_TO_REPAIR'].includes(decision)) {
     res.status(400).json({ success: false, error: 'Invalid decision.' });
     return;
   }
@@ -389,23 +389,25 @@ corporateRouter.post('/authorisations/decide', authenticateToken, (req: AuthRequ
         continue;
       }
 
-      if (decision === 'INFO_REQUESTED') {
+      if (decision === 'INFO_REQUESTED' || decision === 'SEND_TO_REPAIR') {
+        const isRepair = decision === 'SEND_TO_REPAIR';
+        const nextStatus = isRepair ? 'REPAIR_REQUESTED' : p.status;
         timeline.push({
           id: uuidv4(),
-          stage: 'INFO_REQUESTED',
-          label: 'Clarification Requested',
-          description: comment || `Additional supporting info requested by ${req.user!.full_name}`,
+          stage: decision,
+          label: isRepair ? 'Sent to Repair' : 'Clarification Requested',
+          description: comment || `${isRepair ? 'Returned to initiator for repair' : 'Additional supporting info requested'} by ${req.user!.full_name}`,
           actor: req.user!.full_name,
           timestamp: nowIso,
           state: 'CURRENT',
         });
         db.prepare(`
           UPDATE payment_instructions
-          SET approval_history_json = ?, timeline_json = ?, updated_at = datetime('now')
+          SET status = ?, approval_history_json = ?, timeline_json = ?, updated_at = datetime('now')
           WHERE id = ?
-        `).run(JSON.stringify(history), JSON.stringify(timeline), p.id);
-        logAudit(req.user!.id, ctx.activeOrg!.role, 'PAYMENT_INFO_REQUESTED', 'PAYMENT_INSTRUCTION', p.id, { reference: p.reference, comment }, ip);
-        results.push({ id: p.id, reference: p.reference, status: p.status });
+        `).run(nextStatus, JSON.stringify(history), JSON.stringify(timeline), p.id);
+        logAudit(req.user!.id, ctx.activeOrg!.role, isRepair ? 'PAYMENT_SENT_TO_REPAIR' : 'PAYMENT_INFO_REQUESTED', 'PAYMENT_INSTRUCTION', p.id, { reference: p.reference, comment }, ip);
+        results.push({ id: p.id, reference: p.reference, status: nextStatus });
         continue;
       }
 
@@ -509,6 +511,25 @@ corporateRouter.post('/fx-quote', authenticateToken, (req: AuthRequest, res: Res
     success: true,
     quote: { id: quoteId, fromCurrency, toCurrency, amount: numAmt, rate, convertedAmount, fee, expiresAt, validSeconds: 120 },
   });
+});
+
+// GET /api/corporate/fx-rates - Indicative sandbox FX reference board
+corporateRouter.get('/fx-rates', authenticateToken, (_req: AuthRequest, res: Response): void => {
+  const basePairs = [
+    { base: 'GBP', quote: 'USD', rate: Number((FX_TO_GBP.GBP / FX_TO_GBP.USD).toFixed(4)) },
+    { base: 'GBP', quote: 'EUR', rate: Number((FX_TO_GBP.GBP / FX_TO_GBP.EUR).toFixed(4)) },
+    { base: 'GBP', quote: 'INR', rate: Number((FX_TO_GBP.GBP / FX_TO_GBP.INR).toFixed(4)) },
+    { base: 'GBP', quote: 'SGD', rate: Number((FX_TO_GBP.GBP / FX_TO_GBP.SGD).toFixed(4)) },
+    { base: 'GBP', quote: 'AED', rate: Number((FX_TO_GBP.GBP / FX_TO_GBP.AED).toFixed(4)) },
+    { base: 'EUR', quote: 'USD', rate: Number((FX_TO_GBP.EUR / FX_TO_GBP.USD).toFixed(4)) },
+    { base: 'USD', quote: 'INR', rate: Number((FX_TO_GBP.USD / FX_TO_GBP.INR).toFixed(4)) },
+  ].map((p) => ({
+    ...p,
+    inverseRate: Number((1 / p.rate).toFixed(6)),
+    timestamp: new Date().toISOString(),
+    source: 'SANDBOX_INDICATIVE',
+  }));
+  res.json({ success: true, rates: basePairs, timestamp: new Date().toISOString() });
 });
 
 // POST /api/corporate/payments - Create payment instruction (enforcing policy & permissions)
@@ -910,6 +931,26 @@ corporateRouter.post('/receivables/messages/:id/reply', authenticateToken, (req:
     INSERT INTO receivables_messages (id, facility_id, organisation_id, subject, body, sender_name, sender_role, status)
     VALUES (?, ?, ?, ?, ?, ?, ?, 'SENT')
   `).run(uuidv4(), orig.facility_id, ctx.activeOrg.id, `Re: ${orig.subject}`, body, req.user!.full_name, ctx.activeOrg.role);
+  res.json({ success: true });
+});
+
+corporateRouter.post('/receivables/messages', authenticateToken, (req: AuthRequest, res: Response): void => {
+  const { facilityId, subject, body, orgId } = req.body;
+  const ctx = getUserMembership(req.user!.id, orgId);
+  if (!ctx.activeOrg || !subject || !body) {
+    res.status(400).json({ success: false, error: 'Subject and message body are required.' });
+    return;
+  }
+  const id = uuidv4();
+  db.prepare(`
+    INSERT INTO receivables_messages (id, facility_id, organisation_id, subject, body, sender_name, sender_role, status)
+    VALUES (?, ?, ?, ?, ?, ?, ?, 'SENT')
+  `).run(id, facilityId, ctx.activeOrg.id, subject, body, req.user!.full_name, ctx.activeOrg.role);
+  res.json({ success: true, id });
+});
+
+corporateRouter.post('/receivables/messages/:id/read', authenticateToken, (req: AuthRequest, res: Response): void => {
+  db.prepare(`UPDATE receivables_messages SET status = 'READ' WHERE id = ? AND status = 'UNREAD'`).run(req.params.id);
   res.json({ success: true });
 });
 

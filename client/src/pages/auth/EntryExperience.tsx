@@ -1,14 +1,18 @@
 import React, { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
 import {
+  Activity,
   AlertCircle,
   ArrowLeft,
   CheckCircle2,
   ChevronRight,
+  Clock,
   Eye,
   EyeOff,
+  FileKey2,
   Fingerprint,
   HelpCircle,
+  Info,
   KeyRound,
   Lock,
   RefreshCw,
@@ -16,11 +20,11 @@ import {
   ShieldAlert,
   Ship,
   Smartphone,
-  Clock,
 } from 'lucide-react';
 import { useAuth, AuthUser } from '../../context/AuthContext';
 import { apiRequest, ApiError } from '../../lib/api';
 import { BrandMark } from '../../components/ui/BrandMark';
+import { BankingHeader } from '../../components/ui/BankingHeader';
 import { Button, FormInput, NativeDialog } from '../../components/ui/Primitives';
 import {
   detectPasskeySupport,
@@ -35,6 +39,9 @@ type AuthStep =
   | 'SELECT_METHOD'
   | 'PASSWORD'
   | 'PIN'
+  | 'PIN_RESET_CODE'
+  | 'PIN_RESET_NEW'
+  | 'PIN_RESET_SUCCESS'
   | 'SECURITY_CODE'
   | 'MOBILE_PUSH'
   | 'PASSKEY'
@@ -42,9 +49,12 @@ type AuthStep =
   | 'FAILED'
   | 'LOCKED_ACCOUNT'
   | 'GENERATE_CODE_USERNAME'
+  | 'GENERATE_CODE_ACTION'
   | 'GENERATE_CODE_VERIFY'
   | 'GENERATE_CODE_RESULT'
   | 'TRADE_TRACKER_PUBLIC';
+
+type SecurityCodeAction = 'LOGIN' | 'REAUTHENTICATE' | 'AUTHORISATION';
 
 interface LookupProfile {
   username: string;
@@ -61,26 +71,73 @@ interface LookupProfile {
   };
 }
 
+/** Masked 6-slot PIN indicator replicating the HSBCnet Mobile PIN input UI */
+const PinSlotDisplay: React.FC<{ value: string; length?: number }> = ({ value, length = 6 }) => (
+  <div aria-hidden="true" className="grid grid-cols-6 gap-2.5 max-w-[260px] mx-auto pt-1 pb-2">
+    {Array.from({ length }).map((_, idx) => {
+      const filled = idx < value.length;
+      return (
+        <div
+          key={idx}
+          className={`h-10 flex items-center justify-center border-b-2 text-lg font-semibold ${
+            filled ? 'border-[#252B30] text-[#252B30]' : 'border-[#B4BCC2] text-transparent'
+          }`}
+        >
+          {filled ? '•' : '·'}
+        </div>
+      );
+    })}
+  </div>
+);
+
 export const EntryExperience: React.FC = () => {
   const { phase, initError, retryInit, completeLogin, user, unlockSession, logout } = useAuth();
 
   const [step, setStep] = useState<AuthStep>('WELCOME');
   const [username, setUsername] = useState('');
+  const [usernameTouched, setUsernameTouched] = useState(false);
   const [usernameError, setUsernameError] = useState('');
   const [lookup, setLookup] = useState<LookupProfile | null>(null);
   const [loading, setLoading] = useState(false);
   const [authError, setAuthError] = useState('');
 
+  // Remembered usernames on this browser (usernames only, never secrets/PINs)
+  const [rememberedUsers, setRememberedUsers] = useState<string[]>(() => {
+    try {
+      const raw = sessionStorage.getItem('hsbc_cnet_recent_ids');
+      return raw ? JSON.parse(raw) : [];
+    } catch {
+      return [];
+    }
+  });
+
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [pin, setPin] = useState('');
   const [secCode, setSecCode] = useState('');
+
+  // Reset Forgotten / Locked PIN state
+  const [resetMaskedEmail, setResetMaskedEmail] = useState('');
+  const [sandboxResetHint, setSandboxResetHint] = useState('');
+  const [resetCode, setResetCode] = useState('');
+  const [newResetPin, setNewResetPin] = useState('');
+  const [confirmResetPin, setConfirmResetPin] = useState('');
+
+  // Generate Security Code Flow
   const [genUsername, setGenUsername] = useState('');
+  const [genAction, setGenAction] = useState<SecurityCodeAction>('LOGIN');
   const [genPin, setGenPin] = useState('');
   const [generatedCode, setGeneratedCode] = useState<{ code: string; expiresAt: string; ttlSeconds: number } | null>(null);
+  const [remainingSeconds, setRemainingSeconds] = useState(0);
+
+  // Push approval & WebAuthn
   const [pushApproval, setPushApproval] = useState<{ requestId: string; challengeCode: string; status: string } | null>(null);
   const [passkeyCap, setPasskeyCap] = useState({ webauthnSupported: false, platformAuthenticatorAvailable: false });
   const [verifiedSession, setVerifiedSession] = useState<{ accessToken: string; user: AuthUser } | null>(null);
+
+  // Trade tracker preview lookup
+  const [tradeTrackQuery, setTradeTrackQuery] = useState('');
+  const [tradeTrackSample, setTradeTrackSample] = useState<any | null>(null);
 
   const [helpOpen, setHelpOpen] = useState(false);
   const [securityInfoOpen, setSecurityInfoOpen] = useState(false);
@@ -92,6 +149,17 @@ export const EntryExperience: React.FC = () => {
   useEffect(() => {
     detectPasskeySupport().then((s) => setPasskeyCap(s));
   }, []);
+
+  useEffect(() => {
+    if (!generatedCode?.expiresAt) return;
+    const tick = () => {
+      const diff = Math.max(0, Math.round((new Date(generatedCode.expiresAt).getTime() - Date.now()) / 1000));
+      setRemainingSeconds(diff);
+    };
+    tick();
+    const t = window.setInterval(tick, 1000);
+    return () => window.clearInterval(t);
+  }, [generatedCode]);
 
   useEffect(() => {
     if (step !== 'MOBILE_PUSH' || !pushApproval?.requestId) return;
@@ -108,7 +176,11 @@ export const EntryExperience: React.FC = () => {
           setStep('SUCCESS');
         } else if (res.status === 'REJECTED' || res.status === 'EXPIRED') {
           setPushApproval((prev) => (prev ? { ...prev, status: res.status } : null));
-          setAuthError(res.status === 'REJECTED' ? 'Login request was declined on your registered device.' : 'Login request expired.');
+          setAuthError(
+            res.status === 'REJECTED'
+              ? 'Log on request was declined on your registered device.'
+              : 'Log on request expired. Please try again.'
+          );
           setStep('FAILED');
         }
       } catch {
@@ -119,20 +191,31 @@ export const EntryExperience: React.FC = () => {
     return () => window.clearInterval(timer);
   }, [step, pushApproval]);
 
-  // 1. Launch / Splash Screen (Clean white HSBCnet Mobile launch sequence)
+  const rememberUsername = (id: string) => {
+    const clean = id.trim();
+    if (!clean) return;
+    const next = [clean, ...rememberedUsers.filter((u) => u !== clean)].slice(0, 4);
+    setRememberedUsers(next);
+    try {
+      sessionStorage.setItem('hsbc_cnet_recent_ids', JSON.stringify(next));
+    } catch {
+      // ignore
+    }
+  };
+
+  // 1. Application Launch Screen
   if (phase === 'LAUNCHING') {
     return (
-      <main className="min-h-dvh bg-white flex flex-col items-center justify-center p-6">
+      <main className="min-h-dvh bg-[#202A30] flex flex-col items-center justify-center p-6">
         <motion.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           transition={{ duration: 0.35 }}
           className="flex flex-col items-center text-center"
         >
-          <BrandMark size={48} />
-          <h1 className="mt-4 text-xl font-bold tracking-tight text-[#252525]">{BANK_CONFIG.appName}</h1>
-          <div className="mt-5 w-28 h-0.5 bg-[#EBEBEB] overflow-hidden">
-            <div className="h-full w-1/2 bg-[#DB0011] animate-pulse" />
+          <BrandMark size={112} className="rounded-[4px]" />
+          <div className="mt-6 w-28 h-0.5 bg-white/15 overflow-hidden">
+            <div className="h-full w-1/2 bg-[#DB001B] animate-pulse" />
           </div>
         </motion.div>
       </main>
@@ -142,15 +225,15 @@ export const EntryExperience: React.FC = () => {
   // 2. Network / Init Failure Screen
   if (phase === 'INIT_ERROR') {
     return (
-      <main className="min-h-dvh bg-[#F4F4F4] flex items-center justify-center p-4">
-        <div className="w-full max-w-sm bg-white border border-[#D7D8D6] rounded-[2px] p-6 text-center">
-          <BrandMark size={36} className="mx-auto" />
-          <h1 className="mt-4 text-base font-semibold text-[#252525]">Unable to Connect</h1>
-          <p className="mt-2 text-xs text-[#555555] leading-relaxed">{initError}</p>
+      <main className="min-h-dvh bg-[#263640] flex items-center justify-center p-4">
+        <div className="w-full max-w-sm bg-white border border-[#D9DEE1] rounded-[2px] p-6 text-center">
+          <BrandMark size={64} className="mx-auto rounded-[4px]" />
+          <h1 className="mt-4 text-base font-medium text-[#252B30]">Connection Interrupted</h1>
+          <p className="mt-2 text-xs text-[#68727A] leading-relaxed">{initError}</p>
           <div className="mt-5">
             <Button onClick={retryInit} fullWidth>
               <RefreshCw className="w-4 h-4" aria-hidden="true" />
-              Try again
+              Retry Connection
             </Button>
           </div>
         </div>
@@ -158,7 +241,7 @@ export const EntryExperience: React.FC = () => {
     );
   }
 
-  // 3. Session Lock Screen
+  // 3. Session Lock Screen (using consistent dark welcome backdrop)
   if (phase === 'LOCKED' && user) {
     const handleUnlockWithPin = async (e: React.FormEvent) => {
       e.preventDefault();
@@ -193,54 +276,68 @@ export const EntryExperience: React.FC = () => {
         });
         unlockSession();
       } catch (err: any) {
-        setUnlockError(err?.message || 'Biometric verification unavailable. Please use your Mobile Security PIN.');
+        setUnlockError(err?.message || 'Biometric verification unavailable. Please enter your Mobile Security PIN.');
       } finally {
         setUnlockLoading(false);
       }
     };
 
     return (
-      <main className="min-h-dvh bg-[#252525] flex items-center justify-center p-4">
-        <div className="w-full max-w-sm bg-white rounded-[2px] border border-[#D7D8D6] p-6">
-          <div className="flex items-center gap-3 pb-4 border-b border-[#D7D8D6]">
-            <Lock className="w-5 h-5 text-[#DB0011] shrink-0" aria-hidden="true" />
-            <div>
-              <h1 className="text-base font-semibold text-[#252525]">Session locked</h1>
-              <p className="text-xs text-[#767676]">{user.full_name}</p>
+      <main className="relative min-h-dvh flex items-center justify-center p-4 overflow-hidden bg-[#202A30]">
+        <img
+          src="/welcome-bg.jpg"
+          alt=""
+          aria-hidden="true"
+          className="absolute inset-0 w-full h-full object-cover blur-[4px] scale-105 opacity-45"
+        />
+        <div className="absolute inset-0 bg-[#202A30]/75" aria-hidden="true" />
+
+        <div className="relative z-10 w-full max-w-sm bg-white border border-[#D9DEE1] rounded-[2px]">
+          <div className="px-5 py-4 bg-[#263640] text-white flex items-center justify-between gap-3">
+            <div className="flex items-center gap-3">
+              <Lock className="w-5 h-5 text-[#DB001B] shrink-0" aria-hidden="true" />
+              <div>
+                <h1 className="text-base font-medium">Session locked</h1>
+                <p className="text-xs text-white/75">{user.full_name}</p>
+              </div>
             </div>
+            <BrandMark size={36} />
           </div>
 
-          <form onSubmit={handleUnlockWithPin} className="mt-5 space-y-4">
-            <FormInput
-              label="Mobile Security PIN"
-              type="password"
-              inputMode="numeric"
-              pattern="\d{6}"
-              maxLength={6}
-              required
-              autoFocus
-              value={unlockPin}
-              onChange={(e) => setUnlockPin(e.target.value.replace(/\D/g, '').slice(0, 6))}
-              error={unlockError}
-            />
-            <Button type="submit" fullWidth loading={unlockLoading}>
-              Unlock
-            </Button>
-          </form>
-
-          {passkeyCap.webauthnSupported && (
-            <div className="mt-3">
-              <Button variant="outline" fullWidth onClick={handleUnlockWithPasskey} disabled={unlockLoading}>
-                <Fingerprint className="w-4 h-4" aria-hidden="true" />
-                Use Biometrics
+          <div className="p-5">
+            <form onSubmit={handleUnlockWithPin} className="space-y-4">
+              <PinSlotDisplay value={unlockPin} />
+              <FormInput
+                label="Mobile Security PIN"
+                type="password"
+                inputMode="numeric"
+                pattern="\d{6}"
+                maxLength={6}
+                required
+                autoFocus
+                value={unlockPin}
+                onChange={(e) => setUnlockPin(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                error={unlockError}
+              />
+              <Button type="submit" fullWidth loading={unlockLoading}>
+                Continue
               </Button>
-            </div>
-          )}
+            </form>
 
-          <div className="mt-5 pt-4 border-t border-[#D7D8D6] text-center">
-            <button type="button" onClick={logout} className="text-xs font-semibold text-[#DB0011] hover:underline">
-              Log off
-            </button>
+            {passkeyCap.webauthnSupported && (
+              <div className="mt-3">
+                <Button variant="outline" fullWidth onClick={handleUnlockWithPasskey} disabled={unlockLoading}>
+                  <Fingerprint className="w-4 h-4" aria-hidden="true" />
+                  Use Biometrics
+                </Button>
+              </div>
+            )}
+
+            <div className="mt-5 pt-4 border-t border-[#D9DEE1] text-center">
+              <button type="button" onClick={logout} className="text-xs font-medium text-[#DB001B] hover:underline">
+                Log off
+              </button>
+            </div>
           </div>
         </div>
       </main>
@@ -249,11 +346,12 @@ export const EntryExperience: React.FC = () => {
 
   const handleUsernameLookup = async (e: React.FormEvent) => {
     e.preventDefault();
+    setUsernameTouched(true);
     setUsernameError('');
     setAuthError('');
     const trimmed = username.trim();
     if (trimmed.length < 3) {
-      setUsernameError('Please enter your username.');
+      setUsernameError('Please enter your corporate username.');
       return;
     }
     setLoading(true);
@@ -263,6 +361,7 @@ export const EntryExperience: React.FC = () => {
         body: JSON.stringify({ identifier: trimmed }),
         skipAuthHandling: true,
       });
+      rememberUsername(res.profile.username);
       setLookup(res.profile);
       setStep('SELECT_METHOD');
     } catch (err: any) {
@@ -329,6 +428,56 @@ export const EntryExperience: React.FC = () => {
     }
   };
 
+  const handleRequestPinReset = async () => {
+    setAuthError('');
+    setLoading(true);
+    try {
+      const targetId = (username || genUsername).trim();
+      const res = await apiRequest<any>('/api/auth/pin/reset-request', {
+        method: 'POST',
+        body: JSON.stringify({ identifier: targetId }),
+        skipAuthHandling: true,
+      });
+      setResetMaskedEmail(res.maskedEmail || 'registered email');
+      setSandboxResetHint(res.sandboxResetCode || '');
+      setResetCode('');
+      setStep('PIN_RESET_CODE');
+    } catch (err: any) {
+      setAuthError(err?.message || 'Unable to initiate Security PIN reset.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleConfirmPinReset = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setAuthError('');
+    if (!/^\d{6}$/.test(newResetPin) || newResetPin !== confirmResetPin) {
+      setAuthError('Both Security PIN entries must match and contain 6 digits.');
+      return;
+    }
+    setLoading(true);
+    try {
+      await apiRequest('/api/auth/pin/reset-confirm', {
+        method: 'POST',
+        body: JSON.stringify({
+          identifier: (username || genUsername).trim(),
+          resetCode: resetCode.trim(),
+          newPin: newResetPin,
+        }),
+        skipAuthHandling: true,
+      });
+      setNewResetPin('');
+      setConfirmResetPin('');
+      setResetCode('');
+      setStep('PIN_RESET_SUCCESS');
+    } catch (err: any) {
+      setAuthError(err?.message || 'PIN reset verification failed.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleSecurityCodeLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setAuthError('');
@@ -364,7 +513,7 @@ export const EntryExperience: React.FC = () => {
       });
       const res = await apiRequest<any>('/api/auth/security-code/generate', {
         method: 'POST',
-        body: JSON.stringify({ identifier: genUsername.trim(), purpose: 'LOGIN' }),
+        body: JSON.stringify({ identifier: genUsername.trim(), purpose: genAction }),
         skipAuthHandling: true,
       });
       setGeneratedCode({ code: res.code, expiresAt: res.expiresAt, ttlSeconds: res.ttlSeconds });
@@ -405,11 +554,13 @@ export const EntryExperience: React.FC = () => {
         skipAuthHandling: true,
       });
       if (!optionsJson.allowCredentials || optionsJson.allowCredentials.length === 0) {
-        throw new Error('No biometric passkey is registered on this device yet. Log on with your Mobile Security PIN or Password first, then enable biometrics in Settings.');
+        throw new Error(
+          'No biometric passkey is registered on this browser yet. Log on using your Mobile Security PIN or Password, then enable Biometrics under Settings.'
+        );
       }
       const publicKey = parseRequestOptions(optionsJson);
       const cred = (await navigator.credentials.get({ publicKey })) as PublicKeyCredential | null;
-      if (!cred) throw new Error('Biometric prompt cancelled.');
+      if (!cred) throw new Error('Biometric verification cancelled.');
       const encoded = serializeCredential(cred);
       try {
         const res = await apiRequest<any>('/api/auth/webauthn/auth/verify', {
@@ -426,529 +577,873 @@ export const EntryExperience: React.FC = () => {
         throw verifyErr;
       }
     } catch (err: any) {
-      setAuthError(err?.message || 'Biometric verification failed. Use Mobile Security PIN or Password.');
+      setAuthError(err?.message || 'Biometric verification unavailable. Please use Mobile Security PIN or Password.');
     } finally {
       setLoading(false);
     }
   };
 
-  return (
-    <main className="min-h-dvh bg-white sm:bg-[#F4F4F4] flex flex-col">
-      {/* Authentic HSBCnet Mobile Top Bar */}
-      <header className="bg-white border-b border-[#D7D8D6]">
-        <div className="max-w-md mx-auto px-4 h-14 flex items-center justify-between">
-          <div className="flex items-center gap-2.5">
-            <BrandMark size={24} />
-            <span className="text-base font-bold text-[#252525] tracking-tight">{BANK_CONFIG.appName}</span>
-          </div>
-          <div className="flex items-center gap-3 text-xs">
+  const handlePublicTradeLookup = (e: React.FormEvent) => {
+    e.preventDefault();
+    const q = tradeTrackQuery.trim().toUpperCase();
+    if (!q) return;
+    setTradeTrackSample({
+      reference: q,
+      type: 'Import Documentary Credit (Sandbox Preview)',
+      status: 'IN_TRANSIT',
+      lastUpdate: new Date().toISOString(),
+      timeline: [
+        { label: 'Application Issued', detail: 'Recorded in HSBC Cnet Trade Registry', state: 'COMPLETED' },
+        { label: 'Document Examination', detail: 'Awaiting corporate sign-off (sign on to authorise)', state: 'CURRENT' },
+      ],
+    });
+  };
+
+  // =========================================================================
+  // WELCOME SCREEN — Replicating HSBCnet Mobile Dark Photographic Welcome Layout
+  // =========================================================================
+  if (step === 'WELCOME') {
+    return (
+      <main className="relative min-h-dvh flex flex-col justify-between bg-[#202A30] text-white overflow-hidden">
+        {/* Consistent Blurred Night Highway Background */}
+        <img
+          src="/welcome-bg.jpg"
+          alt=""
+          aria-hidden="true"
+          className="absolute inset-0 w-full h-full object-cover blur-[5px] scale-105 opacity-70"
+        />
+        <div
+          aria-hidden="true"
+          className="absolute inset-0 bg-gradient-to-b from-[#202A30]/85 via-[#263640]/55 to-[#202A30]/92"
+        />
+
+        {/* Top Identity Header Bar */}
+        <header className="relative z-10 w-full">
+          <div className="max-w-md mx-auto px-4 pt-3 pb-1 flex items-center justify-between">
+            <div className="w-10" aria-hidden="true" />
+            <div className="flex items-center justify-center">
+              <BrandMark size={52} className="rounded-[4px]" />
+            </div>
             <button
               type="button"
               onClick={() => setSecurityInfoOpen(true)}
-              className="text-[#555555] hover:text-[#252525] font-medium"
+              aria-label="Security information"
+              className="min-w-[40px] min-h-[40px] flex items-center justify-center text-white/90 hover:text-white"
             >
-              Security
-            </button>
-            <button
-              type="button"
-              aria-label="Help and support"
-              onClick={() => setHelpOpen(true)}
-              className="p-1.5 text-[#555555] hover:text-[#252525]"
-            >
-              <HelpCircle className="w-5 h-5" aria-hidden="true" />
+              <Info className="w-5 h-5" strokeWidth={1.75} aria-hidden="true" />
             </button>
           </div>
-        </div>
-      </header>
+        </header>
 
-      {/* Mobile-First Centered App Flow (Clean single-column experience matching HSBCnet Mobile) */}
-      <div className="flex-1 flex flex-col sm:justify-center sm:py-8">
-        <div className="w-full max-w-md mx-auto bg-white sm:border sm:border-[#D7D8D6] flex-1 sm:flex-initial flex flex-col justify-between">
-          <div>
-            {phase === 'SESSION_EXPIRED' && step === 'WELCOME' && (
-              <div role="alert" className="p-3.5 bg-[#FEF7EC] border-b border-[#FCD9A5] text-xs text-[#9A4A06] flex items-center gap-2">
-                <Clock className="w-4 h-4 shrink-0" aria-hidden="true" />
-                <span>Your session has timed out. Please log on again.</span>
+        {/* Center Heading + Minimal Underline Username Entry */}
+        <div className="relative z-10 flex-1 flex flex-col justify-center px-6 py-8 max-w-md w-full mx-auto">
+          <motion.div
+            initial={{ opacity: 0, y: 6 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.25 }}
+          >
+            {phase === 'SESSION_EXPIRED' && (
+              <div
+                role="alert"
+                className="mb-6 p-3 bg-[#202A30]/90 border-l-2 border-[#B77A1D] text-xs text-white flex items-center gap-2"
+              >
+                <Clock className="w-4 h-4 text-[#FCD9A5] shrink-0" aria-hidden="true" />
+                <span>Your session expired due to inactivity. Please log on again.</span>
               </div>
             )}
 
-            <div className="p-5 sm:p-7">
-              {/* STEP 1: WELCOME & ENTER USERNAME */}
-              {step === 'WELCOME' && (
-                <div>
-                  <h1 className="text-2xl font-semibold text-[#252525] tracking-tight">Welcome</h1>
-                  <p className="mt-1.5 text-sm text-[#555555]">
-                    Log on to {BANK_CONFIG.appName} to manage your global accounts and authorisations.
+            <h1 className="text-[28px] sm:text-[32px] font-light text-center tracking-tight text-white">
+              Welcome to <span className="italic font-normal">{BANK_CONFIG.appName}</span>
+            </h1>
+            <p className="mt-2 text-xs text-center text-white/75">
+              Enterprise treasury, payments &amp; corporate authorisations
+            </p>
+
+            <form onSubmit={handleUsernameLookup} className="mt-10 space-y-5" noValidate>
+              <div>
+                <label
+                  htmlFor="welcome-username"
+                  className="block text-xs font-medium text-white/90 text-center mb-1.5"
+                >
+                  Enter your username
+                </label>
+                <div className="relative flex items-center border-b border-white/65 focus-within:border-white transition-colors">
+                  <input
+                    id="welcome-username"
+                    name="username"
+                    type="text"
+                    autoComplete="username webauthn"
+                    autoCorrect="off"
+                    autoCapitalize="none"
+                    spellCheck={false}
+                    enterKeyHint="next"
+                    required
+                    autoFocus
+                    placeholder="Corporate username"
+                    value={username}
+                    onBlur={() => setUsernameTouched(true)}
+                    onChange={(e) => {
+                      setUsername(e.target.value);
+                      if (usernameError) setUsernameError('');
+                    }}
+                    aria-invalid={usernameTouched && !!usernameError ? 'true' : undefined}
+                    aria-describedby={usernameError ? 'welcome-user-err' : undefined}
+                    className="w-full min-h-[44px] bg-transparent px-1 pr-9 text-base sm:text-sm text-white text-center placeholder:text-white/45 focus:outline-none"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setHelpOpen(true)}
+                    aria-label="Username help and support"
+                    className="absolute right-0 min-w-[36px] min-h-[36px] flex items-center justify-center text-white/85 hover:text-white"
+                  >
+                    <HelpCircle className="w-4 h-4" aria-hidden="true" />
+                  </button>
+                </div>
+                {usernameError && (
+                  <p id="welcome-user-err" role="alert" className="mt-2 text-xs text-[#FFB3B7] text-center font-medium">
+                    {usernameError}
                   </p>
+                )}
+              </div>
 
-                  <form onSubmit={handleUsernameLookup} className="mt-6 space-y-4">
-                    <FormInput
-                      label="Username"
-                      name="username"
-                      placeholder="Enter your username"
-                      autoComplete="username webauthn"
-                      autoCorrect="off"
-                      autoCapitalize="none"
-                      spellCheck={false}
-                      enterKeyHint="next"
-                      required
-                      requiredMark
-                      autoFocus
-                      value={username}
-                      onChange={(e) => {
-                        setUsername(e.target.value);
-                        if (usernameError) setUsernameError('');
-                      }}
-                      error={usernameError}
-                    />
-
-                    <Button type="submit" fullWidth size="lg" loading={loading}>
-                      Continue
-                    </Button>
-                  </form>
+              {rememberedUsers.length > 0 && (
+                <div className="flex flex-wrap items-center justify-center gap-1.5 pt-1">
+                  <span className="text-[11px] text-white/60">Registered:</span>
+                  {rememberedUsers.map((id) => (
+                    <button
+                      key={id}
+                      type="button"
+                      onClick={() => setUsername(id)}
+                      className="px-2 py-0.5 text-[11px] bg-white/10 hover:bg-white/20 text-white border border-white/20 rounded-[2px]"
+                    >
+                      {id}
+                    </button>
+                  ))}
                 </div>
               )}
 
-              {/* STEP 2: CHOOSE AUTHENTICATION METHOD */}
-              {step === 'SELECT_METHOD' && lookup && (
-                <div>
+              <Button
+                type="submit"
+                fullWidth
+                size="lg"
+                loading={loading}
+                className={username.trim().length > 0 ? 'bg-[#DB001B]' : 'bg-[#DB001B]/80 hover:bg-[#DB001B]'}
+              >
+                Continue
+              </Button>
+            </form>
+          </motion.div>
+        </div>
+
+        {/* Bottom Dual Action Bar matching official Welcome screen */}
+        <footer className="relative z-10 w-full bg-[#202A30]/85 border-t border-white/15 backdrop-blur-sm pb-safe">
+          <div className="max-w-md mx-auto grid grid-cols-2 divide-x divide-white/15">
+            <button
+              type="button"
+              onClick={() => {
+                setGenUsername(username);
+                setGenPin('');
+                setAuthError('');
+                setStep('GENERATE_CODE_USERNAME');
+              }}
+              className="py-4 px-3 flex flex-col items-center justify-center gap-1.5 text-white/90 hover:bg-white/5 transition-colors"
+            >
+              <FileKey2 className="w-5 h-5" strokeWidth={1.6} aria-hidden="true" />
+              <span className="text-[11px] font-medium leading-tight text-center">
+                Generate a<br />security code
+              </span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                setTradeTrackSample(null);
+                setTradeTrackQuery('');
+                setStep('TRADE_TRACKER_PUBLIC');
+              }}
+              className="py-4 px-3 flex flex-col items-center justify-center gap-1.5 text-white/90 hover:bg-white/5 transition-colors"
+            >
+              <Activity className="w-5 h-5" strokeWidth={1.6} aria-hidden="true" />
+              <span className="text-[11px] font-medium leading-tight text-center">
+                Trade Transaction<br />Tracker
+              </span>
+            </button>
+          </div>
+        </footer>
+
+        {/* Modals */}
+        <NativeDialog open={helpOpen} onClose={() => setHelpOpen(false)} title="Help and Support">
+          <div className="space-y-3 text-xs text-[#68727A] leading-relaxed">
+            <p className="text-[#252B30]">
+              Enter your HSBC Cnet corporate username and select <strong>Continue</strong> to choose your authentication method (Biometrics, Mobile Security PIN, Corporate Password, Security Device Code, or Registered Device Push).
+            </p>
+            <div className="p-3 bg-[#F4F5F6] border border-[#D9DEE1] rounded-[2px]">
+              <p className="font-semibold text-[#252B30] mb-1">Sandbox Test Credentials</p>
+              <ul className="space-y-1">
+                <li><code>premier_user</code> / <code>Password@123</code> (Org Admin)</li>
+                <li><code>corp_initiator</code> / <code>CorpPass@2026</code> (Initiator)</li>
+                <li><code>corp_authoriser</code> / <code>CorpPass@2026</code> (Authoriser)</li>
+                <li><code>corp_viewer</code> / <code>CorpPass@2026</code> (Finance Viewer)</li>
+                <li>Default 6-digit Mobile Security PIN: <code>123456</code></li>
+              </ul>
+            </div>
+          </div>
+        </NativeDialog>
+
+        <NativeDialog open={securityInfoOpen} onClose={() => setSecurityInfoOpen(false)} title="Security Information">
+          <div className="space-y-3 text-xs text-[#68727A] leading-relaxed">
+            <p className="text-[#252B30]">
+              Keep your Mobile Security PIN and one-time security codes confidential. Never authorise payment instructions without reviewing the exact beneficiary name, bank account, and amount.
+            </p>
+            <p>{BANK_CONFIG.disclaimer}</p>
+          </div>
+        </NativeDialog>
+      </main>
+    );
+  }
+
+  // =========================================================================
+  // SUB-FLOWS (White clean navigation shell matching logon_with_mobile.pdf & manage_pin.pdf)
+  // =========================================================================
+  const subTitle =
+    step === 'GENERATE_CODE_USERNAME' || step === 'GENERATE_CODE_ACTION' || step === 'GENERATE_CODE_VERIFY' || step === 'GENERATE_CODE_RESULT'
+      ? 'Generate a security code'
+      : step === 'PIN_RESET_CODE' || step === 'PIN_RESET_NEW' || step === 'PIN_RESET_SUCCESS'
+      ? 'Reset your security PIN'
+      : step === 'TRADE_TRACKER_PUBLIC'
+      ? 'Trade Transaction Tracker'
+      : 'Log on to HSBC Cnet';
+
+  const handleBack = () => {
+    setAuthError('');
+    if (step === 'SELECT_METHOD' || step === 'FAILED' || step === 'LOCKED_ACCOUNT' || step === 'GENERATE_CODE_USERNAME' || step === 'TRADE_TRACKER_PUBLIC') {
+      setStep('WELCOME');
+    } else if (step === 'GENERATE_CODE_ACTION') {
+      setStep('GENERATE_CODE_USERNAME');
+    } else if (step === 'GENERATE_CODE_VERIFY') {
+      setStep('GENERATE_CODE_ACTION');
+    } else if (step === 'GENERATE_CODE_RESULT') {
+      setGeneratedCode(null);
+      setStep('WELCOME');
+    } else if (step === 'PIN_RESET_CODE' || step === 'PIN_RESET_NEW') {
+      setStep(lookup ? 'PIN' : 'WELCOME');
+    } else {
+      setStep('SELECT_METHOD');
+    }
+  };
+
+  return (
+    <main className="min-h-dvh bg-[#F4F5F6] flex flex-col items-center justify-center sm:p-6">
+      <div className="w-full max-w-md bg-white sm:border sm:border-[#D9DEE1] min-h-dvh sm:min-h-[600px] flex flex-col">
+        <BankingHeader
+          title={subTitle}
+          onBack={step === 'SUCCESS' || step === 'PIN_RESET_SUCCESS' ? undefined : handleBack}
+          rightSlot={
+            <button
+              type="button"
+              onClick={() => setSecurityInfoOpen(true)}
+              aria-label="Security information"
+              className="p-2 text-[#68727A] hover:text-[#252B30]"
+            >
+              <Info className="w-4 h-4" aria-hidden="true" />
+            </button>
+          }
+        />
+
+        <div className="flex-1 flex flex-col justify-between">
+          {/* SELECT AUTHENTICATION METHOD */}
+          {step === 'SELECT_METHOD' && lookup && (
+            <div className="flex-1 flex flex-col justify-between">
+              <div>
+                <div className="px-4 py-4 bg-[#F4F5F6] border-b border-[#D9DEE1]">
+                  <div className="text-[11px] uppercase tracking-wider text-[#68727A]">Corporate Profile</div>
+                  <div className="text-base font-medium text-[#252B30] mt-0.5">{lookup.fullName}</div>
+                  <div className="text-xs text-[#68727A]">{lookup.organisationName} ({lookup.country})</div>
+                </div>
+
+                <div className="px-4 pt-4 pb-2">
+                  <h1 className="text-sm font-medium text-[#252B30]">Select authentication method</h1>
+                </div>
+
+                {authError && (
+                  <div role="alert" className="mx-4 mb-3 p-3 bg-[#FDF2F3] border-l-4 border-[#C83A42] text-xs text-[#C83A42]">
+                    {authError}
+                  </div>
+                )}
+
+                <div className="divide-y divide-[#D9DEE1] border-y border-[#D9DEE1]">
+                  {passkeyCap.webauthnSupported && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setAuthError('');
+                        setStep('PASSKEY');
+                      }}
+                      className="w-full px-4 py-3.5 flex items-center justify-between hover:bg-[#F4F5F6] text-left"
+                    >
+                      <div className="flex items-center gap-3">
+                        <Fingerprint className="w-5 h-5 text-[#DB001B]" strokeWidth={1.75} aria-hidden="true" />
+                        <div>
+                          <div className="text-sm font-medium text-[#252B30]">Biometrics</div>
+                          <div className="text-xs text-[#68727A]">Face ID / Touch ID / Platform Passkey</div>
+                        </div>
+                      </div>
+                      <ChevronRight className="w-4 h-4 text-[#68727A]" aria-hidden="true" />
+                    </button>
+                  )}
+
+                  {lookup.methods.securityPin && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setAuthError('');
+                        setPin('');
+                        setStep('PIN');
+                      }}
+                      className="w-full px-4 py-3.5 flex items-center justify-between hover:bg-[#F4F5F6] text-left"
+                    >
+                      <div className="flex items-center gap-3">
+                        <Smartphone className="w-5 h-5 text-[#263640]" strokeWidth={1.75} aria-hidden="true" />
+                        <div>
+                          <div className="text-sm font-medium text-[#252B30]">Mobile Security PIN</div>
+                          <div className="text-xs text-[#68727A]">Authenticate using your 6-digit PIN</div>
+                        </div>
+                      </div>
+                      <ChevronRight className="w-4 h-4 text-[#68727A]" aria-hidden="true" />
+                    </button>
+                  )}
+
                   <button
                     type="button"
                     onClick={() => {
                       setAuthError('');
-                      setStep('WELCOME');
+                      setPassword('');
+                      setStep('PASSWORD');
                     }}
-                    className="inline-flex items-center gap-1.5 text-xs font-semibold text-[#DB0011] hover:underline mb-4"
+                    className="w-full px-4 py-3.5 flex items-center justify-between hover:bg-[#F4F5F6] text-left"
                   >
-                    <ArrowLeft className="w-3.5 h-3.5" aria-hidden="true" />
-                    Back
-                  </button>
-
-                  <div className="pb-4 border-b border-[#D7D8D6] mb-5">
-                    <div className="text-xs text-[#767676]">Logging on as</div>
-                    <div className="text-base font-semibold text-[#252525] mt-0.5">{lookup.fullName}</div>
-                    <div className="text-xs text-[#555555]">{lookup.organisationName}</div>
-                  </div>
-
-                  <h1 className="text-lg font-semibold text-[#252525] mb-3">Log on method</h1>
-
-                  {authError && (
-                    <div role="alert" className="mb-4 p-3 bg-[#FDF2F2] border-l-4 border-[#DB0011] text-xs text-[#B0000D] flex items-center gap-2">
-                      <AlertCircle className="w-4 h-4 shrink-0" />
-                      <span>{authError}</span>
+                    <div className="flex items-center gap-3">
+                      <Lock className="w-5 h-5 text-[#263640]" strokeWidth={1.75} aria-hidden="true" />
+                      <div>
+                        <div className="text-sm font-medium text-[#252B30]">Password</div>
+                        <div className="text-xs text-[#68727A]">Corporate username &amp; password</div>
+                      </div>
                     </div>
+                    <ChevronRight className="w-4 h-4 text-[#68727A]" aria-hidden="true" />
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setAuthError('');
+                      setSecCode('');
+                      setStep('SECURITY_CODE');
+                    }}
+                    className="w-full px-4 py-3.5 flex items-center justify-between hover:bg-[#F4F5F6] text-left"
+                  >
+                    <div className="flex items-center gap-3">
+                      <KeyRound className="w-5 h-5 text-[#263640]" strokeWidth={1.75} aria-hidden="true" />
+                      <div>
+                        <div className="text-sm font-medium text-[#252B30]">Security Device / Security Code</div>
+                        <div className="text-xs text-[#68727A]">Enter a time-limited security code</div>
+                      </div>
+                    </div>
+                    <ChevronRight className="w-4 h-4 text-[#68727A]" aria-hidden="true" />
+                  </button>
+
+                  {lookup.methods.mobileAuth && (
+                    <button
+                      type="button"
+                      onClick={handleStartPushApproval}
+                      className="w-full px-4 py-3.5 flex items-center justify-between hover:bg-[#F4F5F6] text-left"
+                    >
+                      <div className="flex items-center gap-3">
+                        <Shield className="w-5 h-5 text-[#263640]" strokeWidth={1.75} aria-hidden="true" />
+                        <div>
+                          <div className="text-sm font-medium text-[#252B30]">Push notification approval</div>
+                          <div className="text-xs text-[#68727A]">Approve sign-in from your registered device</div>
+                        </div>
+                      </div>
+                      <ChevronRight className="w-4 h-4 text-[#68727A]" aria-hidden="true" />
+                    </button>
                   )}
-
-                  <div className="divide-y divide-[#D7D8D6] border-y border-[#D7D8D6] -mx-5 sm:-mx-7">
-                    {passkeyCap.webauthnSupported && (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setAuthError('');
-                          setStep('PASSKEY');
-                        }}
-                        className="w-full px-5 sm:px-7 py-4 flex items-center justify-between hover:bg-[#F4F4F4] text-left"
-                      >
-                        <div className="flex items-center gap-3">
-                          <Fingerprint className="w-5 h-5 text-[#DB0011]" />
-                          <div>
-                            <div className="text-sm font-semibold text-[#252525]">Biometrics</div>
-                            <div className="text-xs text-[#767676]">Face ID / Touch ID / Passkey</div>
-                          </div>
-                        </div>
-                        <ChevronRight className="w-4 h-4 text-[#767676]" />
-                      </button>
-                    )}
-
-                    {lookup.methods.securityPin && (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setAuthError('');
-                          setPin('');
-                          setStep('PIN');
-                        }}
-                        className="w-full px-5 sm:px-7 py-4 flex items-center justify-between hover:bg-[#F4F4F4] text-left"
-                      >
-                        <div className="flex items-center gap-3">
-                          <Smartphone className="w-5 h-5 text-[#252525]" />
-                          <div>
-                            <div className="text-sm font-semibold text-[#252525]">Mobile Security PIN</div>
-                            <div className="text-xs text-[#767676]">Enter your 6-digit PIN</div>
-                          </div>
-                        </div>
-                        <ChevronRight className="w-4 h-4 text-[#767676]" />
-                      </button>
-                    )}
-
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setAuthError('');
-                        setPassword('');
-                        setStep('PASSWORD');
-                      }}
-                      className="w-full px-5 sm:px-7 py-4 flex items-center justify-between hover:bg-[#F4F4F4] text-left"
-                    >
-                      <div className="flex items-center gap-3">
-                        <Lock className="w-5 h-5 text-[#252525]" />
-                        <div>
-                          <div className="text-sm font-semibold text-[#252525]">Password</div>
-                          <div className="text-xs text-[#767676]">Enter your corporate password</div>
-                        </div>
-                      </div>
-                      <ChevronRight className="w-4 h-4 text-[#767676]" />
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setAuthError('');
-                        setSecCode('');
-                        setStep('SECURITY_CODE');
-                      }}
-                      className="w-full px-5 sm:px-7 py-4 flex items-center justify-between hover:bg-[#F4F4F4] text-left"
-                    >
-                      <div className="flex items-center gap-3">
-                        <KeyRound className="w-5 h-5 text-[#252525]" />
-                        <div>
-                          <div className="text-sm font-semibold text-[#252525]">Security device code</div>
-                          <div className="text-xs text-[#767676]">Enter an 8-digit security code</div>
-                        </div>
-                      </div>
-                      <ChevronRight className="w-4 h-4 text-[#767676]" />
-                    </button>
-
-                    {lookup.methods.mobileAuth && (
-                      <button
-                        type="button"
-                        onClick={handleStartPushApproval}
-                        className="w-full px-5 sm:px-7 py-4 flex items-center justify-between hover:bg-[#F4F4F4] text-left"
-                      >
-                        <div className="flex items-center gap-3">
-                          <Shield className="w-5 h-5 text-[#252525]" />
-                          <div>
-                            <div className="text-sm font-semibold text-[#252525]">Approve from registered device</div>
-                            <div className="text-xs text-[#767676]">Send push notification approval</div>
-                          </div>
-                        </div>
-                        <ChevronRight className="w-4 h-4 text-[#767676]" />
-                      </button>
-                    )}
-                  </div>
                 </div>
-              )}
+              </div>
 
-              {/* STEP 3A: PASSWORD */}
-              {step === 'PASSWORD' && (
-                <form onSubmit={handlePasswordSubmit} className="space-y-4">
-                  <button type="button" onClick={() => setStep('SELECT_METHOD')} className="inline-flex items-center gap-1.5 text-xs font-semibold text-[#DB0011] hover:underline">
-                    <ArrowLeft className="w-3.5 h-3.5" /> Back
-                  </button>
-                  <h1 className="text-lg font-semibold text-[#252525]">Enter your password</h1>
-                  <p className="text-xs text-[#767676]">Profile: {username}</p>
-                  <FormInput
-                    label="Password"
-                    name="password"
-                    type={showPassword ? 'text' : 'password'}
-                    autoComplete="current-password"
-                    required
-                    requiredMark
-                    autoFocus
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    error={authError}
-                    rightAdornment={
-                      <button
-                        type="button"
-                        aria-pressed={showPassword}
-                        aria-label={showPassword ? 'Hide password' : 'Show password'}
-                        onClick={() => setShowPassword((v) => !v)}
-                        className="p-1.5 text-[#555555] hover:text-[#252525]"
-                      >
-                        {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                      </button>
-                    }
-                  />
-                  <Button type="submit" fullWidth size="lg" loading={loading}>
-                    Log on
-                  </Button>
-                </form>
-              )}
-
-              {/* STEP 3B: MOBILE SECURITY PIN */}
-              {step === 'PIN' && (
-                <form onSubmit={handlePinSubmit} className="space-y-4">
-                  <button type="button" onClick={() => setStep('SELECT_METHOD')} className="inline-flex items-center gap-1.5 text-xs font-semibold text-[#DB0011] hover:underline">
-                    <ArrowLeft className="w-3.5 h-3.5" /> Back
-                  </button>
-                  <h1 className="text-lg font-semibold text-[#252525]">Mobile Security PIN</h1>
-                  <p className="text-xs text-[#767676]">Enter your 6-digit PIN for {username}.</p>
-                  <FormInput
-                    label="6-Digit Security PIN"
-                    name="pin"
-                    type="password"
-                    inputMode="numeric"
-                    pattern="\d{6}"
-                    maxLength={6}
-                    required
-                    requiredMark
-                    autoFocus
-                    value={pin}
-                    onChange={(e) => setPin(e.target.value.replace(/\D/g, '').slice(0, 6))}
-                    error={authError}
-                  />
-                  <Button type="submit" fullWidth size="lg" loading={loading}>
-                    Log on
-                  </Button>
-                </form>
-              )}
-
-              {/* STEP 3C: SECURITY CODE */}
-              {step === 'SECURITY_CODE' && (
-                <form onSubmit={handleSecurityCodeLogin} className="space-y-4">
-                  <button type="button" onClick={() => setStep('SELECT_METHOD')} className="inline-flex items-center gap-1.5 text-xs font-semibold text-[#DB0011] hover:underline">
-                    <ArrowLeft className="w-3.5 h-3.5" /> Back
-                  </button>
-                  <h1 className="text-lg font-semibold text-[#252525]">Security device code</h1>
-                  <p className="text-xs text-[#767676]">Enter the temporary 8-digit code generated by your security device.</p>
-                  <FormInput
-                    label="Security code"
-                    name="securityCode"
-                    type="text"
-                    inputMode="numeric"
-                    autoComplete="one-time-code"
-                    maxLength={8}
-                    required
-                    requiredMark
-                    autoFocus
-                    value={secCode}
-                    onChange={(e) => setSecCode(e.target.value.replace(/\D/g, '').slice(0, 8))}
-                    error={authError}
-                  />
-                  <Button type="submit" fullWidth size="lg" loading={loading}>
-                    Log on
-                  </Button>
-                </form>
-              )}
-
-              {/* STEP 3D: BIOMETRICS / PASSKEY */}
-              {step === 'PASSKEY' && (
-                <div className="space-y-4">
-                  <button type="button" onClick={() => setStep('SELECT_METHOD')} className="inline-flex items-center gap-1.5 text-xs font-semibold text-[#DB0011] hover:underline">
-                    <ArrowLeft className="w-3.5 h-3.5" /> Back
-                  </button>
-                  <h1 className="text-lg font-semibold text-[#252525]">Biometric logon</h1>
-                  <p className="text-xs text-[#555555] leading-relaxed">
-                    Verify your identity with your registered device biometrics / passkey.
-                  </p>
-                  {authError && <div role="alert" className="p-3 bg-[#FDF2F2] border-l-4 border-[#DB0011] text-xs text-[#B0000D]">{authError}</div>}
-                  <Button onClick={handlePasskeyAuth} loading={loading} fullWidth size="lg">
-                    <Fingerprint className="w-4 h-4" /> Verify with Biometrics
-                  </Button>
-                  <Button variant="outline" onClick={() => setStep('PIN')} fullWidth>
-                    Use Mobile Security PIN instead
-                  </Button>
-                </div>
-              )}
-
-              {/* STEP 3E: MOBILE PUSH APPROVAL */}
-              {step === 'MOBILE_PUSH' && pushApproval && (
-                <div className="space-y-4">
-                  <button type="button" onClick={() => setStep('SELECT_METHOD')} className="inline-flex items-center gap-1.5 text-xs font-semibold text-[#DB0011] hover:underline">
-                    <ArrowLeft className="w-3.5 h-3.5" /> Cancel
-                  </button>
-                  <h1 className="text-lg font-semibold text-[#252525]">Approve logon request</h1>
-                  <p className="text-xs text-[#555555]">Check your registered device and match the number below:</p>
-                  <div className="p-6 bg-[#F4F4F4] border border-[#D7D8D6] text-center">
-                    <div className="text-3xl font-bold text-[#252525] tabular-nums">{pushApproval.challengeCode}</div>
-                  </div>
-                  <Button variant="outline" fullWidth onClick={() => setStep('PIN')}>
-                    Use Mobile Security PIN instead
-                  </Button>
-                </div>
-              )}
-
-              {/* STEP 4: LOGON CONFIRMATION */}
-              {step === 'SUCCESS' && verifiedSession && (
-                <div className="space-y-5 py-2">
-                  <div className="flex items-center gap-2.5 text-[#008A52] font-semibold text-base">
-                    <CheckCircle2 className="w-6 h-6" />
-                    <span>Logon successful</span>
-                  </div>
-                  <p className="text-xs text-[#555555]">
-                    Authenticated as <strong>{verifiedSession.user.full_name}</strong> ({verifiedSession.user.organisationName}).
-                  </p>
-                  <Button fullWidth size="lg" onClick={() => completeLogin(verifiedSession.accessToken, verifiedSession.user)}>
-                    Go to Accounts
-                  </Button>
-                </div>
-              )}
-
-              {/* FAILED OR LOCKED */}
-              {(step === 'FAILED' || step === 'LOCKED_ACCOUNT') && (
-                <div className="space-y-4 py-2">
-                  <div className="flex items-center gap-2 text-[#DB0011] font-semibold text-base">
-                    <ShieldAlert className="w-6 h-6" />
-                    <span>{step === 'LOCKED_ACCOUNT' ? 'Profile locked' : 'Logon unsuccessful'}</span>
-                  </div>
-                  <p className="text-xs text-[#555555] leading-relaxed">{authError}</p>
-                  <Button fullWidth variant="outline" onClick={() => { setAuthError(''); setStep('WELCOME'); }}>
-                    Return to Welcome
-                  </Button>
-                </div>
-              )}
-
-              {/* WELCOME -> GENERATE SECURITY CODE FLOW (Step 1: Username, Step 2: PIN, Step 3: Code) */}
-              {step === 'GENERATE_CODE_USERNAME' && (
-                <form
-                  onSubmit={(e) => {
-                    e.preventDefault();
-                    setAuthError('');
-                    if (genUsername.trim().length < 3) {
-                      setAuthError('Enter your username.');
-                      return;
-                    }
-                    setStep('GENERATE_CODE_VERIFY');
-                  }}
-                  className="space-y-4"
-                >
-                  <button type="button" onClick={() => setStep('WELCOME')} className="inline-flex items-center gap-1.5 text-xs font-semibold text-[#DB0011] hover:underline">
-                    <ArrowLeft className="w-3.5 h-3.5" /> Back
-                  </button>
-                  <h1 className="text-lg font-semibold text-[#252525]">Generate a security code</h1>
-                  <p className="text-xs text-[#555555]">Enter your username to generate a code for desktop logon.</p>
-                  <FormInput
-                    label="Username"
-                    autoCapitalize="none"
-                    autoCorrect="off"
-                    spellCheck={false}
-                    required
-                    autoFocus
-                    value={genUsername}
-                    onChange={(e) => setGenUsername(e.target.value)}
-                    error={authError}
-                  />
-                  <Button type="submit" fullWidth size="lg">Continue</Button>
-                </form>
-              )}
-
-              {step === 'GENERATE_CODE_VERIFY' && (
-                <form onSubmit={handleGenerateCodeFlow} className="space-y-4">
-                  <button type="button" onClick={() => setStep('GENERATE_CODE_USERNAME')} className="inline-flex items-center gap-1.5 text-xs font-semibold text-[#DB0011] hover:underline">
-                    <ArrowLeft className="w-3.5 h-3.5" /> Back
-                  </button>
-                  <h1 className="text-lg font-semibold text-[#252525]">Verify your identity</h1>
-                  <p className="text-xs text-[#555555]">Enter your 6-digit Mobile Security PIN for <strong>{genUsername}</strong>.</p>
-                  <FormInput
-                    label="Mobile Security PIN"
-                    type="password"
-                    inputMode="numeric"
-                    maxLength={6}
-                    required
-                    autoFocus
-                    value={genPin}
-                    onChange={(e) => setGenPin(e.target.value.replace(/\D/g, '').slice(0, 6))}
-                    error={authError}
-                  />
-                  <Button type="submit" fullWidth size="lg" loading={loading}>Generate code</Button>
-                </form>
-              )}
-
-              {step === 'GENERATE_CODE_RESULT' && generatedCode && (
-                <div className="space-y-4">
-                  <h1 className="text-lg font-semibold text-[#252525]">Your security code</h1>
-                  <p className="text-xs text-[#555555]">Enter this code on your desktop browser within 2 minutes:</p>
-                  <div className="p-5 bg-[#252525] text-white text-center rounded-[2px]">
-                    <div className="text-3xl font-mono font-bold tracking-[0.25em] tabular-nums">{generatedCode.code}</div>
-                  </div>
-                  <Button fullWidth variant="outline" onClick={() => { setGeneratedCode(null); setStep('WELCOME'); }}>
-                    Done
-                  </Button>
-                </div>
-              )}
-
-              {/* WELCOME -> TRADE TRANSACTION TRACKER */}
-              {step === 'TRADE_TRACKER_PUBLIC' && (
-                <div className="space-y-4">
-                  <button type="button" onClick={() => setStep('WELCOME')} className="inline-flex items-center gap-1.5 text-xs font-semibold text-[#DB0011] hover:underline">
-                    <ArrowLeft className="w-3.5 h-3.5" /> Back
-                  </button>
-                  <h1 className="text-lg font-semibold text-[#252525]">Trade transaction tracker</h1>
-                  <p className="text-xs text-[#555555] leading-relaxed">
-                    Log on with your corporate username to track import documentary credits, amendments, and bills under the Track tab.
-                  </p>
-                  <Button fullWidth onClick={() => setStep('WELCOME')}>Log on</Button>
-                </div>
-              )}
+              <div className="p-4 border-t border-[#D9DEE1] bg-[#F4F5F6] text-[11px] text-[#68727A]">
+                Protected by multi-stage authentication and backend session controls.
+              </div>
             </div>
-          </div>
+          )}
 
-          {/* Authentic HSBCnet Mobile Welcome Bottom Action Rows */}
-          {step === 'WELCOME' && (
-            <div className="border-t border-[#D7D8D6] divide-y divide-[#D7D8D6]">
-              <button
-                type="button"
-                onClick={() => {
-                  setGenUsername(username);
-                  setGenPin('');
-                  setAuthError('');
-                  setStep('GENERATE_CODE_USERNAME');
-                }}
-                className="w-full px-5 sm:px-7 py-4 flex items-center justify-between hover:bg-[#F4F4F4] text-left"
-              >
-                <span className="flex items-center gap-3 text-sm font-medium text-[#252525]">
-                  <KeyRound className="w-4 h-4 text-[#DB0011]" aria-hidden="true" />
-                  <span>Generate a security code</span>
-                </span>
-                <ChevronRight className="w-4 h-4 text-[#767676]" aria-hidden="true" />
-              </button>
-              <button
-                type="button"
-                onClick={() => setStep('TRADE_TRACKER_PUBLIC')}
-                className="w-full px-5 sm:px-7 py-4 flex items-center justify-between hover:bg-[#F4F4F4] text-left"
-              >
-                <span className="flex items-center gap-3 text-sm font-medium text-[#252525]">
-                  <Ship className="w-4 h-4 text-[#252525]" aria-hidden="true" />
-                  <span>Trade transaction tracker</span>
-                </span>
-                <ChevronRight className="w-4 h-4 text-[#767676]" aria-hidden="true" />
-              </button>
-              <button
-                type="button"
-                onClick={() => setHelpOpen(true)}
-                className="w-full px-5 sm:px-7 py-4 flex items-center justify-between hover:bg-[#F4F4F4] text-left"
-              >
-                <span className="flex items-center gap-3 text-sm font-medium text-[#252525]">
-                  <HelpCircle className="w-4 h-4 text-[#252525]" aria-hidden="true" />
-                  <span>Logon help &amp; support</span>
-                </span>
-                <ChevronRight className="w-4 h-4 text-[#767676]" aria-hidden="true" />
-              </button>
+          {/* PASSWORD VERIFICATION */}
+          {step === 'PASSWORD' && (
+            <form onSubmit={handlePasswordSubmit} className="p-5 space-y-5 flex-1 flex flex-col justify-between">
+              <div className="space-y-4">
+                <h1 className="text-base font-medium text-[#252B30]">Enter your corporate password</h1>
+                <p className="text-xs text-[#68727A]">Profile: <strong className="text-[#252B30]">{username}</strong></p>
+                <FormInput
+                  label="Password"
+                  name="password"
+                  type={showPassword ? 'text' : 'password'}
+                  autoComplete="current-password"
+                  required
+                  requiredMark
+                  autoFocus
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  error={authError}
+                  rightAdornment={
+                    <button
+                      type="button"
+                      aria-pressed={showPassword}
+                      aria-label={showPassword ? 'Hide password' : 'Show password'}
+                      onClick={() => setShowPassword((v) => !v)}
+                      className="p-1.5 text-[#68727A] hover:text-[#252B30]"
+                    >
+                      {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    </button>
+                  }
+                />
+              </div>
+              <Button type="submit" fullWidth size="lg" loading={loading}>
+                Log on
+              </Button>
+            </form>
+          )}
+
+          {/* MOBILE SECURITY PIN SCREEN (manage_pin.pdf style) */}
+          {step === 'PIN' && (
+            <form onSubmit={handlePinSubmit} className="p-5 space-y-5 flex-1 flex flex-col justify-between">
+              <div className="space-y-4">
+                <div className="text-center pt-2">
+                  <h1 className="text-base font-medium text-[#252B30]">Enter your security PIN</h1>
+                  <p className="text-xs text-[#68727A] mt-1">Profile: {username}</p>
+                </div>
+                <PinSlotDisplay value={pin} />
+                <FormInput
+                  label="6-Digit Mobile Security PIN"
+                  name="pin"
+                  type="password"
+                  inputMode="numeric"
+                  pattern="\d{6}"
+                  maxLength={6}
+                  required
+                  autoFocus
+                  value={pin}
+                  onChange={(e) => setPin(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                  error={authError}
+                />
+                <div className="text-center pt-1">
+                  <button
+                    type="button"
+                    onClick={handleRequestPinReset}
+                    className="text-xs font-medium text-[#263640] underline hover:text-[#DB001B]"
+                  >
+                    Forget your security PIN?
+                  </button>
+                </div>
+              </div>
+              <Button type="submit" fullWidth size="lg" loading={loading}>
+                Continue
+              </Button>
+            </form>
+          )}
+
+          {/* PIN RESET STEP 1: ENTER RESET CODE */}
+          {step === 'PIN_RESET_CODE' && (
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                setAuthError('');
+                if (resetCode.trim().length < 4) {
+                  setAuthError('Enter the verification code sent to your registered email.');
+                  return;
+                }
+                setStep('PIN_RESET_NEW');
+              }}
+              className="p-5 space-y-4 flex-1 flex flex-col justify-between"
+            >
+              <div className="space-y-4">
+                <div className="text-xs text-[#68727A]">1/3 ENTER RESET CODE</div>
+                <h1 className="text-base font-medium text-[#252B30]">Verify code</h1>
+                <p className="text-xs text-[#68727A] leading-relaxed">
+                  We have sent a verification code to <strong className="text-[#252B30]">{resetMaskedEmail}</strong>. Valid for 30 minutes.
+                </p>
+                {sandboxResetHint && (
+                  <div className="p-2.5 bg-[#F4F5F6] border border-[#D9DEE1] text-[11px] text-[#252B30]">
+                    Sandbox reset code: <strong className="font-mono">{sandboxResetHint}</strong>
+                  </div>
+                )}
+                <FormInput
+                  label="Enter reset code"
+                  inputMode="numeric"
+                  maxLength={8}
+                  required
+                  autoFocus
+                  value={resetCode}
+                  onChange={(e) => setResetCode(e.target.value)}
+                  error={authError}
+                />
+              </div>
+              <Button type="submit" fullWidth size="lg">
+                Continue
+              </Button>
+            </form>
+          )}
+
+          {/* PIN RESET STEP 2: CREATE & CONFIRM NEW PIN */}
+          {step === 'PIN_RESET_NEW' && (
+            <form onSubmit={handleConfirmPinReset} className="p-5 space-y-4 flex-1 flex flex-col justify-between">
+              <div className="space-y-4">
+                <div className="text-xs text-[#68727A]">2/3 CREATE A SECURITY PIN</div>
+                <h1 className="text-base font-medium text-[#252B30]">Create and confirm your new PIN</h1>
+                <FormInput
+                  label="Create a security PIN"
+                  type="password"
+                  inputMode="numeric"
+                  maxLength={6}
+                  required
+                  autoFocus
+                  value={newResetPin}
+                  onChange={(e) => setNewResetPin(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                />
+                <FormInput
+                  label="Confirm security PIN"
+                  type="password"
+                  inputMode="numeric"
+                  maxLength={6}
+                  required
+                  value={confirmResetPin}
+                  onChange={(e) => setConfirmResetPin(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                  error={authError}
+                />
+                <p className="text-[11px] text-[#68727A] bg-[#F4F5F6] p-3 border border-[#D9DEE1]">
+                  You will need this PIN when confirming your identity on HSBC Cnet or approving instructions.
+                </p>
+              </div>
+              <Button type="submit" fullWidth size="lg" loading={loading}>
+                Continue
+              </Button>
+            </form>
+          )}
+
+          {/* PIN RESET ACKNOWLEDGEMENT */}
+          {step === 'PIN_RESET_SUCCESS' && (
+            <div className="p-6 flex-1 flex flex-col justify-between text-center">
+              <div className="my-auto space-y-3">
+                <CheckCircle2 className="w-12 h-12 text-[#27835B] mx-auto" strokeWidth={1.75} aria-hidden="true" />
+                <h1 className="text-lg font-medium text-[#252B30]">Success</h1>
+                <p className="text-xs text-[#68727A]">
+                  You can now log on to HSBC Cnet with your new Mobile Security PIN.
+                </p>
+              </div>
+              <Button fullWidth size="lg" onClick={() => setStep('WELCOME')}>
+                Continue
+              </Button>
+            </div>
+          )}
+
+          {/* SECURITY DEVICE CODE */}
+          {step === 'SECURITY_CODE' && (
+            <form onSubmit={handleSecurityCodeLogin} className="p-5 space-y-4 flex-1 flex flex-col justify-between">
+              <div className="space-y-4">
+                <h1 className="text-base font-medium text-[#252B30]">Security device code</h1>
+                <p className="text-xs text-[#68727A]">Enter the 8-digit code generated on your security device or mobile soft token.</p>
+                <FormInput
+                  label="Security code"
+                  name="securityCode"
+                  type="text"
+                  inputMode="numeric"
+                  autoComplete="one-time-code"
+                  maxLength={8}
+                  required
+                  autoFocus
+                  value={secCode}
+                  onChange={(e) => setSecCode(e.target.value.replace(/\D/g, '').slice(0, 8))}
+                  error={authError}
+                />
+              </div>
+              <Button type="submit" fullWidth size="lg" loading={loading}>
+                Log on
+              </Button>
+            </form>
+          )}
+
+          {/* BIOMETRICS / WEBAUTHN PASSKEY */}
+          {step === 'PASSKEY' && (
+            <div className="p-5 space-y-4 flex-1 flex flex-col justify-between">
+              <div className="space-y-4">
+                <h1 className="text-base font-medium text-[#252B30]">Biometric logon</h1>
+                <p className="text-xs text-[#68727A] leading-relaxed">
+                  Verify using your platform authenticator (Face ID, Touch ID, Windows Hello, or browser passkey).
+                </p>
+                {authError && (
+                  <div role="alert" className="p-3 bg-[#FDF2F3] border-l-4 border-[#C83A42] text-xs text-[#C83A42]">
+                    {authError}
+                  </div>
+                )}
+              </div>
+              <div className="space-y-2.5">
+                <Button onClick={handlePasskeyAuth} loading={loading} fullWidth size="lg">
+                  <Fingerprint className="w-4 h-4" aria-hidden="true" />
+                  Verify with Biometrics
+                </Button>
+                <Button variant="outline" onClick={() => setStep('PIN')} fullWidth>
+                  Use Mobile Security PIN instead
+                </Button>
+              </div>
+            </div>
+          )}
+
+          {/* PUSH APPROVAL CHALLENGE */}
+          {step === 'MOBILE_PUSH' && pushApproval && (
+            <div className="p-5 space-y-4 flex-1 flex flex-col justify-between">
+              <div className="space-y-4">
+                <h1 className="text-base font-medium text-[#252B30]">We&apos;ve sent a notification</h1>
+                <p className="text-xs text-[#68727A]">
+                  Open the notification on your registered mobile device and match this challenge number:
+                </p>
+                <div className="p-6 bg-[#F4F5F6] border border-[#D9DEE1] text-center">
+                  <div className="text-3xl font-semibold text-[#252B30] tabular-nums tracking-wider">
+                    {pushApproval.challengeCode}
+                  </div>
+                </div>
+                <p className="text-[11px] text-[#68727A] text-center">Waiting for approval from your registered device...</p>
+              </div>
+              <Button variant="outline" fullWidth onClick={() => setStep('PIN')}>
+                Use Mobile Security PIN instead
+              </Button>
+            </div>
+          )}
+
+          {/* SUCCESSFUL LOGON CONFIRMATION */}
+          {step === 'SUCCESS' && verifiedSession && (
+            <div className="p-6 flex-1 flex flex-col justify-between">
+              <div className="my-auto text-center space-y-3">
+                <CheckCircle2 className="w-12 h-12 text-[#27835B] mx-auto" strokeWidth={1.75} aria-hidden="true" />
+                <h1 className="text-lg font-medium text-[#252B30]">Logon successful</h1>
+                <p className="text-xs text-[#68727A]">
+                  Authenticated as <strong className="text-[#252B30]">{verifiedSession.user.full_name}</strong>
+                  <br />
+                  {verifiedSession.user.organisationName}
+                </p>
+              </div>
+              <Button fullWidth size="lg" onClick={() => completeLogin(verifiedSession.accessToken, verifiedSession.user)}>
+                Go to Accounts
+              </Button>
+            </div>
+          )}
+
+          {/* FAILED / LOCKED ACCOUNT */}
+          {(step === 'FAILED' || step === 'LOCKED_ACCOUNT') && (
+            <div className="p-6 flex-1 flex flex-col justify-between">
+              <div className="my-auto text-center space-y-3">
+                <ShieldAlert className="w-12 h-12 text-[#C83A42] mx-auto" strokeWidth={1.75} aria-hidden="true" />
+                <h1 className="text-lg font-medium text-[#252B30]">
+                  {step === 'LOCKED_ACCOUNT' ? 'Security PIN locked' : 'Logon unsuccessful'}
+                </h1>
+                <p className="text-xs text-[#68727A] leading-relaxed">{authError}</p>
+              </div>
+              <div className="space-y-2">
+                {step === 'LOCKED_ACCOUNT' && (
+                  <Button fullWidth onClick={handleRequestPinReset} loading={loading}>
+                    Reset your security PIN
+                  </Button>
+                )}
+                <Button fullWidth variant="outline" onClick={() => { setAuthError(''); setStep('WELCOME'); }}>
+                  Return to Welcome
+                </Button>
+              </div>
+            </div>
+          )}
+
+          {/* GENERATE CODE STEP 1: USERNAME */}
+          {step === 'GENERATE_CODE_USERNAME' && (
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                setAuthError('');
+                if (genUsername.trim().length < 3) {
+                  setAuthError('Enter your corporate username.');
+                  return;
+                }
+                setStep('GENERATE_CODE_ACTION');
+              }}
+              className="p-5 space-y-4 flex-1 flex flex-col justify-between"
+            >
+              <div className="space-y-4">
+                <h1 className="text-base font-medium text-[#252B30]">Enter your username</h1>
+                <FormInput
+                  label="HSBC Cnet username"
+                  autoCapitalize="none"
+                  autoCorrect="off"
+                  spellCheck={false}
+                  required
+                  autoFocus
+                  value={genUsername}
+                  onChange={(e) => setGenUsername(e.target.value)}
+                  error={authError}
+                />
+                <div className="p-3 bg-[#F4F5F6] border border-[#D9DEE1] text-[11px] text-[#68727A] flex gap-2">
+                  <Info className="w-4 h-4 shrink-0 text-[#263640]" aria-hidden="true" />
+                  <span>Please enter the corporate username registered to your security profile.</span>
+                </div>
+              </div>
+              <Button type="submit" fullWidth size="lg">
+                Continue
+              </Button>
+            </form>
+          )}
+
+          {/* GENERATE CODE STEP 2: 3 CLEAR MOBILE AUTH ACTIONS (logon_with_mobile.pdf p.6) */}
+          {step === 'GENERATE_CODE_ACTION' && (
+            <div>
+              <div className="px-4 py-3 bg-[#F4F5F6] border-b border-[#D9DEE1] text-xs text-[#68727A]">
+                Select security action for <strong className="text-[#252B30]">{genUsername}</strong>
+              </div>
+              <div className="divide-y divide-[#D9DEE1] border-b border-[#D9DEE1]">
+                {(
+                  [
+                    { id: 'LOGIN', title: 'Log on', desc: 'Access HSBC Cnet on desktop browser' },
+                    { id: 'REAUTHENTICATE', title: 'Re-authenticate', desc: 'Verify your identity to access some functions' },
+                    { id: 'AUTHORISATION', title: 'Confirm an instruction', desc: 'Authorise a transaction or request' },
+                  ] as const
+                ).map((item) => (
+                  <button
+                    key={item.id}
+                    type="button"
+                    onClick={() => {
+                      setGenAction(item.id);
+                      setGenPin('');
+                      setAuthError('');
+                      setStep('GENERATE_CODE_VERIFY');
+                    }}
+                    className={`w-full px-4 py-4 flex items-center justify-between text-left transition-colors ${
+                      genAction === item.id ? 'bg-[#F4F5F6]' : 'bg-white hover:bg-[#F4F5F6]'
+                    }`}
+                  >
+                    <div>
+                      <div className="text-sm font-medium text-[#252B30]">{item.title}</div>
+                      <div className="text-xs text-[#68727A] mt-0.5">{item.desc}</div>
+                    </div>
+                    <ChevronRight className="w-4 h-4 text-[#68727A]" aria-hidden="true" />
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* GENERATE CODE STEP 3: VERIFY PIN */}
+          {step === 'GENERATE_CODE_VERIFY' && (
+            <form onSubmit={handleGenerateCodeFlow} className="p-5 space-y-4 flex-1 flex flex-col justify-between">
+              <div className="space-y-4">
+                <h1 className="text-base font-medium text-[#252B30] text-center">Enter your security PIN</h1>
+                <PinSlotDisplay value={genPin} />
+                <FormInput
+                  label="Security PIN"
+                  type="password"
+                  inputMode="numeric"
+                  maxLength={6}
+                  required
+                  autoFocus
+                  value={genPin}
+                  onChange={(e) => setGenPin(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                  error={authError}
+                />
+                <div className="p-3 bg-[#F4F5F6] border border-[#D9DEE1] text-[11px] text-[#68727A] flex gap-2">
+                  <Info className="w-4 h-4 shrink-0 text-[#263640]" aria-hidden="true" />
+                  <span>If you enter the wrong security PIN, the security code generated will not authenticate.</span>
+                </div>
+              </div>
+              <Button type="submit" fullWidth size="lg" loading={loading}>
+                Continue
+              </Button>
+            </form>
+          )}
+
+          {/* GENERATE CODE STEP 4: DISPLAY BACKEND CODE */}
+          {step === 'GENERATE_CODE_RESULT' && generatedCode && (
+            <div className="p-5 space-y-5 flex-1 flex flex-col justify-between">
+              <div className="space-y-4">
+                <h1 className="text-base font-medium text-[#252B30]">Your security code</h1>
+                <div className="p-5 bg-[#F4F5F6] border border-[#D9DEE1] text-center">
+                  <div className="text-3xl font-mono font-semibold tracking-[0.25em] text-[#252B30] tabular-nums">
+                    {generatedCode.code}
+                  </div>
+                </div>
+                <p className="text-xs text-[#252B30]">
+                  Security code is available for{' '}
+                  <strong className="tabular-nums">{remainingSeconds} seconds</strong>.
+                </p>
+                <div className="p-3 bg-[#F4F5F6] border border-[#D9DEE1] text-[11px] text-[#68727A] space-y-1">
+                  <p>Please use this code before it expires ({genAction.toLowerCase()}).</p>
+                  <p>To keep your corporate account safe, never share your security codes with anyone.</p>
+                </div>
+              </div>
+              <Button fullWidth variant="outline" onClick={() => { setGeneratedCode(null); setStep('WELCOME'); }}>
+                Done
+              </Button>
+            </div>
+          )}
+
+          {/* PUBLIC TRADE TRANSACTION TRACKER ENTRY POINT */}
+          {step === 'TRADE_TRACKER_PUBLIC' && (
+            <div className="p-5 space-y-5 flex-1 flex flex-col justify-between">
+              <div className="space-y-4">
+                <div className="flex items-center gap-2 text-[#263640]">
+                  <Ship className="w-5 h-5" aria-hidden="true" />
+                  <h1 className="text-base font-medium text-[#252B30]">Trade Transaction Tracker</h1>
+                </div>
+                <p className="text-xs text-[#68727A] leading-relaxed">
+                  Track status updates for Documentary Credits, Amendments, and Import Bills by reference number, or sign on for full corporate trade workflows.
+                </p>
+                <form onSubmit={handlePublicTradeLookup} className="space-y-3">
+                  <FormInput
+                    label="Trade Transaction Reference"
+                    placeholder="e.g. TRD-2026-11092"
+                    value={tradeTrackQuery}
+                    onChange={(e) => setTradeTrackQuery(e.target.value)}
+                  />
+                  <Button type="submit" variant="secondary" fullWidth>
+                    Track Reference (Sandbox)
+                  </Button>
+                </form>
+
+                {tradeTrackSample && (
+                  <div className="p-4 bg-[#F4F5F6] border border-[#D9DEE1] space-y-2 text-xs">
+                    <div className="flex items-center justify-between">
+                      <strong className="text-[#252B30]">{tradeTrackSample.reference}</strong>
+                      <span className="px-2 py-0.5 bg-white border border-[#D9DEE1] text-[11px] font-medium text-[#B77A1D]">
+                        {tradeTrackSample.status.replace(/_/g, ' ')}
+                      </span>
+                    </div>
+                    <div className="text-[#68727A]">{tradeTrackSample.type}</div>
+                    <ul className="pt-2 space-y-1.5 border-t border-[#D9DEE1]">
+                      {tradeTrackSample.timeline.map((t: any) => (
+                        <li key={t.label} className="text-[#252B30]">
+                          <strong>{t.label}:</strong> <span className="text-[#68727A]">{t.detail}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </div>
+              <Button fullWidth onClick={() => setStep('WELCOME')}>
+                Log on to Full Trade Portal
+              </Button>
             </div>
           )}
         </div>
       </div>
 
-      {/* Help Modal */}
-      <NativeDialog open={helpOpen} onClose={() => setHelpOpen(false)} title="HSBC Cnet Logon Help">
-        <div className="space-y-3 text-xs text-[#555555] leading-relaxed">
-          <p>Enter your corporate username and press Continue to choose your authentication method (Biometrics, Mobile Security PIN, Password, or Security Code).</p>
-          <p><strong>Test Profiles (Sandbox):</strong></p>
-          <ul className="list-disc pl-5 space-y-1">
-            <li><code>premier_user</code> / <code>Password@123</code> (Org Admin)</li>
-            <li><code>corp_initiator</code> / <code>CorpPass@2026</code> (Initiator)</li>
-            <li><code>corp_authoriser</code> / <code>CorpPass@2026</code> (Authoriser)</li>
-            <li><code>corp_viewer</code> / <code>CorpPass@2026</code> (Viewer)</li>
-            <li>Default 6-digit Mobile Security PIN: <code>123456</code></li>
-          </ul>
-        </div>
-      </NativeDialog>
-
       {/* Security Info Modal */}
       <NativeDialog open={securityInfoOpen} onClose={() => setSecurityInfoOpen(false)} title="Security Information">
-        <div className="space-y-3 text-xs text-[#555555] leading-relaxed">
-          <p>Always keep your Mobile Security PIN and security codes confidential. Never authorise payments without checking beneficiary details and exact amounts.</p>
+        <div className="space-y-3 text-xs text-[#68727A] leading-relaxed">
+          <p className="text-[#252B30]">
+            Always verify the exact beneficiary details and amounts before authorising any instruction. Never disclose your PIN or security codes.
+          </p>
+          <p>{BANK_CONFIG.disclaimer}</p>
         </div>
       </NativeDialog>
     </main>

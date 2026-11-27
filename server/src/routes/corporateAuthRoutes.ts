@@ -297,6 +297,71 @@ corporateAuthRouter.post('/pin/set', authenticateToken, (req: AuthRequest, res: 
   res.json({ success: true, message: '6-digit Mobile Security PIN updated.' });
 });
 
+// POST /api/auth/pin/change - Change existing PIN with verification of old PIN
+corporateAuthRouter.post('/pin/change', authenticateToken, (req: AuthRequest, res: Response): void => {
+  const { currentPin, newPin } = req.body;
+  if (!/^\d{6}$/.test(String(currentPin || '')) || !/^\d{6}$/.test(String(newPin || ''))) {
+    res.status(400).json({ success: false, error: 'Current and new 6-digit Security PINs are required.' });
+    return;
+  }
+  const user = db.prepare(`SELECT * FROM users WHERE id = ?`).get(req.user!.id) as any;
+  if (!user || !user.security_pin_hash || !bcrypt.compareSync(String(currentPin), user.security_pin_hash)) {
+    res.status(401).json({ success: false, error: 'Current Mobile Security PIN is incorrect.' });
+    return;
+  }
+  const pinHash = bcrypt.hashSync(String(newPin), 10);
+  db.prepare(`UPDATE users SET security_pin_hash = ?, failed_logins = 0, is_locked = 0 WHERE id = ?`).run(pinHash, user.id);
+  logAudit(user.id, user.role, 'SECURITY_PIN_CHANGED', 'USER', user.id, {});
+  res.json({ success: true, message: 'Your Mobile Security PIN has been changed.' });
+});
+
+// POST /api/auth/pin/reset-request - Request a reset verification code for forgotten/locked PIN
+corporateAuthRouter.post('/pin/reset-request', (req: Request, res: Response): void => {
+  const { identifier } = req.body;
+  if (!identifier) {
+    res.status(400).json({ success: false, error: 'Corporate username is required.' });
+    return;
+  }
+  const user = db.prepare(`SELECT id, username, email, role FROM users WHERE username = ? OR email = ?`).get(identifier, identifier) as any;
+  if (!user) {
+    res.status(404).json({ success: false, error: 'Username not recognised.' });
+    return;
+  }
+  const code = String(crypto.randomInt(100000, 999999));
+  const codeHash = bcrypt.hashSync(code, 8);
+  const expiresAt = new Date(Date.now() + 30 * 60 * 1000).toISOString();
+  db.prepare(`INSERT INTO security_codes (id, user_id, code_hash, purpose, expires_at) VALUES (?, ?, ?, 'PIN_RESET', ?)`).run(uuidv4(), user.id, codeHash, expiresAt);
+  logAudit(user.id, user.role, 'PIN_RESET_CODE_SENT', 'SECURITY_CODE', user.id, {});
+  const parts = String(user.email || 'user@corporate.local').split('@');
+  const maskedEmail = `${parts[0].slice(0, 2)}****@${parts[1] || 'corporate.local'}`;
+  res.json({ success: true, maskedEmail, sandboxResetCode: code, expiresInMinutes: 30 });
+});
+
+// POST /api/auth/pin/reset-confirm - Verify reset code and set new 6-digit PIN
+corporateAuthRouter.post('/pin/reset-confirm', (req: Request, res: Response): void => {
+  const { identifier, resetCode, newPin } = req.body;
+  if (!identifier || !resetCode || !/^\d{6}$/.test(String(newPin || ''))) {
+    res.status(400).json({ success: false, error: 'Username, reset code, and 6-digit new PIN are required.' });
+    return;
+  }
+  const user = db.prepare(`SELECT * FROM users WHERE username = ? OR email = ?`).get(identifier, identifier) as any;
+  if (!user) {
+    res.status(404).json({ success: false, error: 'Profile not found.' });
+    return;
+  }
+  const activeCodes = db.prepare(`SELECT * FROM security_codes WHERE user_id = ? AND purpose = 'PIN_RESET' AND used_at IS NULL AND expires_at > datetime('now') ORDER BY created_at DESC LIMIT 5`).all(user.id) as any[];
+  const matched = activeCodes.find((c) => bcrypt.compareSync(String(resetCode).trim(), c.code_hash));
+  if (!matched) {
+    res.status(401).json({ success: false, error: 'Invalid or expired reset code.' });
+    return;
+  }
+  db.prepare(`UPDATE security_codes SET used_at = datetime('now') WHERE id = ?`).run(matched.id);
+  const pinHash = bcrypt.hashSync(String(newPin), 10);
+  db.prepare(`UPDATE users SET security_pin_hash = ?, failed_logins = 0, is_locked = 0, mobile_auth_active = 1 WHERE id = ?`).run(pinHash, user.id);
+  logAudit(user.id, user.role, 'SECURITY_PIN_RESET_COMPLETED', 'USER', user.id, {});
+  res.json({ success: true, message: 'Mobile Security PIN reset successfully. You can now log on using your new PIN.' });
+});
+
 // Push Login Approval Workflow
 corporateAuthRouter.post('/login-approval/request', (req: Request, res: Response): void => {
   const { identifier } = req.body;
@@ -394,6 +459,18 @@ corporateAuthRouter.post('/devices/:id/deactivate', authenticateToken, (req: Aut
   db.prepare(`UPDATE registered_devices SET status = 'DEACTIVATED' WHERE id = ? AND user_id = ?`).run(req.params.id, req.user!.id);
   logAudit(req.user!.id, req.user!.role, 'DEVICE_DEACTIVATED', 'DEVICE', req.params.id, {});
   res.json({ success: true, message: 'Device deactivated.' });
+});
+
+corporateAuthRouter.post('/devices/:id/activate', authenticateToken, (req: AuthRequest, res: Response): void => {
+  db.prepare(`UPDATE registered_devices SET status = 'ACTIVE', last_used_at = datetime('now') WHERE id = ? AND user_id = ?`).run(req.params.id, req.user!.id);
+  logAudit(req.user!.id, req.user!.role, 'DEVICE_REACTIVATED', 'DEVICE', req.params.id, {});
+  res.json({ success: true, message: 'Device re-activated.' });
+});
+
+corporateAuthRouter.delete('/devices/:id', authenticateToken, (req: AuthRequest, res: Response): void => {
+  db.prepare(`DELETE FROM registered_devices WHERE id = ? AND user_id = ?`).run(req.params.id, req.user!.id);
+  logAudit(req.user!.id, req.user!.role, 'DEVICE_REMOVED', 'DEVICE', req.params.id, {});
+  res.json({ success: true, message: 'Device removed.' });
 });
 
 // WebAuthn / Passkey Registration, Auth & Step-Up Reauthentication
