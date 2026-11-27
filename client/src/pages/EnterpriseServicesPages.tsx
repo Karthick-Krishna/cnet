@@ -17,7 +17,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { apiRequest } from '../lib/api';
-import { formatDateTime, formatFinancialCurrency } from '@shared/utils/formatters';
+import { formatDateTime, formatFinancialCurrency, formatInrCrores } from '@shared/utils/formatters';
 import { GeometricHeader } from '../components/ui/GeometricHeader';
 import { BankingHeader } from '../components/ui/BankingHeader';
 import {
@@ -272,6 +272,9 @@ export const LiquidityView: React.FC<{ onBack?: () => void }> = ({ onBack }) => 
         <div className="text-xs text-[#68727A]">Total position</div>
         <div className="text-2xl font-normal text-[#252B30] tabular-nums mt-0.5">
           {formatFinancialCurrency(totalPos, displayCurrency, hideBalances)}
+          {displayCurrency === 'INR' && (
+            <span className="ml-2 text-sm text-[#68727A]">({formatInrCrores(totalPos, hideBalances)})</span>
+          )}
         </div>
         <div className="text-xs text-[#27835B] font-medium mt-1">↑ 2.4% (Sandbox comparative)</div>
 

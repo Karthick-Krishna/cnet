@@ -18,12 +18,13 @@ authRouter.post('/login', (req: Request, res: Response): void => {
   }
 
   // Lookup user by username or customer_id
+  const trimmedId = String(identifier).trim();
   let user = db.prepare(`
     SELECT u.*, cp.customer_id 
     FROM users u
     LEFT JOIN customer_profiles cp ON cp.user_id = u.id
-    WHERE u.username = ? OR cp.customer_id = ?
-  `).get(identifier, identifier) as any;
+    WHERE LOWER(u.username) = LOWER(?) OR LOWER(cp.customer_id) = LOWER(?)
+  `).get(trimmedId, trimmedId) as any;
 
   if (!user) {
     res.status(401).json({ success: false, error: 'Invalid credentials or customer not registered' });

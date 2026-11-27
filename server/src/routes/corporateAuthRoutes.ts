@@ -84,7 +84,7 @@ corporateAuthRouter.post('/lookup', (req: Request, res: Response): void => {
     SELECT u.*, cp.customer_id
     FROM users u
     LEFT JOIN customer_profiles cp ON cp.user_id = u.id
-    WHERE u.username = ? OR cp.customer_id = ? OR u.email = ?
+    WHERE LOWER(u.username) = LOWER(?) OR LOWER(cp.customer_id) = LOWER(?) OR LOWER(u.email) = LOWER(?)
   `).get(trimmed, trimmed, trimmed) as any;
 
   if (!user) {
@@ -136,12 +136,13 @@ corporateAuthRouter.post('/login-pin', (req: Request, res: Response): void => {
     return;
   }
 
+  const trimmedId = String(identifier).trim();
   const user = db.prepare(`
     SELECT u.*, cp.customer_id
     FROM users u
     LEFT JOIN customer_profiles cp ON cp.user_id = u.id
-    WHERE u.username = ? OR cp.customer_id = ?
-  `).get(identifier, identifier) as any;
+    WHERE LOWER(u.username) = LOWER(?) OR LOWER(cp.customer_id) = LOWER(?)
+  `).get(trimmedId, trimmedId) as any;
 
   if (!user || !user.security_pin_hash) {
     res.status(401).json({ success: false, error: 'Security PIN is not configured for this profile.' });
@@ -176,7 +177,7 @@ corporateAuthRouter.post('/security-code/generate', (req: Request, res: Response
     return;
   }
 
-  const user = db.prepare(`SELECT id, username, role, is_locked FROM users WHERE username = ? OR email = ?`).get(identifier, identifier) as any;
+  const user = db.prepare(`SELECT id, username, role, is_locked FROM users WHERE LOWER(username) = LOWER(?) OR LOWER(email) = LOWER(?)`).get(String(identifier).trim(), String(identifier).trim()) as any;
   if (!user) {
     res.status(404).json({ success: false, error: 'Corporate profile not found.' });
     return;
@@ -216,12 +217,13 @@ corporateAuthRouter.post('/login-security-code', (req: Request, res: Response): 
     return;
   }
 
+  const trimmedId = String(identifier).trim();
   const user = db.prepare(`
     SELECT u.*, cp.customer_id
     FROM users u
     LEFT JOIN customer_profiles cp ON cp.user_id = u.id
-    WHERE u.username = ? OR cp.customer_id = ?
-  `).get(identifier, identifier) as any;
+    WHERE LOWER(u.username) = LOWER(?) OR LOWER(cp.customer_id) = LOWER(?)
+  `).get(trimmedId, trimmedId) as any;
 
   if (!user) {
     res.status(401).json({ success: false, error: 'Invalid user profile.' });

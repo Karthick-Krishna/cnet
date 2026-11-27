@@ -20,10 +20,14 @@
 
 @layer base {
   html {
-    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    font-family: 'Univers Next', 'Helvetica Neue', 'Roboto', Arial, sans-serif;
     color: var(--text-primary);
     background-color: var(--surface-secondary);
     -webkit-font-smoothing: antialiased;
+  }
+
+  .font-hsbc-serif {
+    font-family: 'Libre Baskerville', Georgia, 'Times New Roman', serif;
   }
 
   .tabular-nums {

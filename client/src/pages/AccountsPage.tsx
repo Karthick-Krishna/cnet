@@ -23,7 +23,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { apiRequest } from '../lib/api';
-import { formatDateTime, formatFinancialCurrency } from '@shared/utils/formatters';
+import { formatDateTime, formatFinancialCurrency, formatInrCrores } from '@shared/utils/formatters';
 import { GeometricHeader } from '../components/ui/GeometricHeader';
 import { BankingHeader } from '../components/ui/BankingHeader';
 import {
@@ -848,7 +848,7 @@ export const AccountsPage: React.FC<{ onNavigate?: (tab: string, sub?: string) =
         <div className="relative z-10 w-full max-w-[1440px] mx-auto px-4 sm:px-6 py-4">
           <div className="max-w-[395px] text-white">
             <h1 className="text-[22px] sm:text-[26px] font-normal tracking-tight leading-tight mb-2.5">
-              Welcome to HSBC<span className="italic font-light">net</span>
+              Welcome to HSBCnet
             </h1>
 
             <div className="bg-[#11161B]/80 border border-white/15 p-3.5 sm:p-4 backdrop-blur-[2px]">
@@ -942,7 +942,9 @@ export const AccountsPage: React.FC<{ onNavigate?: (tab: string, sub?: string) =
             <p className="text-xs text-[#68727A] mt-0.5">
               {activeOrg?.name} • Total available ({baseCurrency}):{' '}
               <strong className="text-[#252B30] tabular-nums">
-                {totalAvailableBase === null ? 'Not Available' : formatFinancialCurrency(totalAvailableBase, baseCurrency, hideBalances)}
+                {totalAvailableBase === null
+                  ? 'Not Available'
+                  : `${formatFinancialCurrency(totalAvailableBase, baseCurrency, hideBalances)}${baseCurrency === 'INR' ? ` (${formatInrCrores(totalAvailableBase, hideBalances)})` : ''}`}
               </strong>
             </p>
           </div>

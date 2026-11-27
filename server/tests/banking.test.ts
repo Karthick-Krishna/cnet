@@ -12,7 +12,7 @@ describe('Premier Mobile Banking - Core Banking Test Suite', () => {
     // Authenticate as Customer
     const res = await request(app)
       .post('/api/auth/login')
-      .send({ identifier: 'premier_user', password: 'Password@123' });
+      .send({ identifier: 'coralgenz global', password: 'Password@123' });
     expect(res.status).toBe(200);
     expect(res.body.success).toBe(true);
     customerToken = res.body.accessToken;
@@ -46,7 +46,7 @@ describe('Premier Mobile Banking - Core Banking Test Suite', () => {
   it('should reject invalid passwords and enforce secure error handling', async () => {
     const res = await request(app)
       .post('/api/auth/login')
-      .send({ identifier: 'premier_user', password: 'WrongPassword99' });
+      .send({ identifier: 'coralgenz global', password: 'WrongPassword99' });
     expect(res.status).toBe(401);
     expect(res.body.success).toBe(false);
   });
@@ -54,7 +54,7 @@ describe('Premier Mobile Banking - Core Banking Test Suite', () => {
   it('should permit biometric login when customer has biometric enabled', async () => {
     const res = await request(app)
       .post('/api/auth/login')
-      .send({ identifier: 'premier_user', isBiometric: true });
+      .send({ identifier: 'coralgenz global', isBiometric: true });
     expect(res.status).toBe(200);
     expect(res.body.success).toBe(true);
     expect(res.body.user.biometric_enabled).toBe(true);
@@ -280,7 +280,7 @@ describe('MeridianNet Corporate Banking - Enterprise Transformation Suite', () =
     const selfApprove = await request(app)
       .post('/api/corporate/authorisations/decide')
       .set('Authorization', `Bearer ${initiatorToken}`)
-      .send({ orgId: 'org-meridian-in', ids: [createdPaymentId], decision: 'APPROVED', stepUpPin: '123456' });
+      .send({ orgId: 'org-meridian-in', ids: [createdPaymentId], decision: 'APPROVED', stepUpPin: '002831' });
     expect(selfApprove.status).toBe(403);
 
     // Authoriser without step-up PIN gets STEP_UP_REQUIRED
@@ -295,7 +295,7 @@ describe('MeridianNet Corporate Banking - Enterprise Transformation Suite', () =
     const approved = await request(app)
       .post('/api/corporate/authorisations/decide')
       .set('Authorization', `Bearer ${authoriserToken}`)
-      .send({ orgId: 'org-meridian-in', ids: [createdPaymentId], decision: 'APPROVED', stepUpPin: '123456' });
+      .send({ orgId: 'org-meridian-in', ids: [createdPaymentId], decision: 'APPROVED', stepUpPin: '002831' });
     expect(approved.status).toBe(200);
     expect(approved.body.results[0].status).toBe('COMPLETED');
   });
@@ -303,7 +303,7 @@ describe('MeridianNet Corporate Banking - Enterprise Transformation Suite', () =
   it('should enforce country-gated Remote Deposit Capture rules and single-company isolation', async () => {
     const premierRes = await request(app)
       .post('/api/auth/login')
-      .send({ identifier: 'premier_user', password: 'Password@123' });
+      .send({ identifier: 'coralgenz global', password: 'Password@123' });
     const premierToken = premierRes.body.accessToken;
 
     const inRes = await request(app)

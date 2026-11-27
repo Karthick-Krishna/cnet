@@ -4,7 +4,7 @@
  * ensuring all HSBC Cnet client workflows remain functional in cloud previews.
  */
 
-const STORAGE_KEY = 'hsbc_cnet_coralgenz_india_v4';
+const STORAGE_KEY = 'hsbc_cnet_coralgenz_india_v6';
 
 interface SandboxState {
   organisations: any[];
@@ -64,51 +64,34 @@ function getInitialState(): SandboxState {
       {
         id: 'acc-in-1', organisation_id: 'org-meridian-in', account_number: '0641-0088-2941-01',
         maskedAccountNumber: '•••• •••• 4101', account_name: 'India Corporate Current',
-        nickname: 'Chennai Ops INR', account_type: 'OPERATING', currency: 'INR', available_balance: 14850200.00, ledger_balance: 15120000.00,
-        availableBalance: 14850200.00, ledgerBalance: 15120000.00, status: 'ACTIVE', country: 'IN',
+        nickname: 'Chennai Ops INR', account_type: 'OPERATING', currency: 'INR', available_balance: 122373000.00, ledger_balance: 122373000.00,
+        availableBalance: 122373000.00, ledgerBalance: 122373000.00, status: 'ACTIVE', country: 'IN',
         branch_name: 'Chennai Anna Salai Corporate', institution: 'Coralgenz Global India Pvt Ltd', ifsc_swift: 'CGLB0641002',
         isFavourite: true, favourite_order: 1,
       },
       {
-        id: 'acc-gb-1', organisation_id: 'org-meridian-in', account_number: '400515-89410291',
-        maskedAccountNumber: '•••• •••• 0291', account_name: 'GBP Operating Treasury',
-        nickname: 'UK EEFC Settlement', account_type: 'SAVINGS', currency: 'GBP',
-        available_balance: 48250.75, ledger_balance: 48250.75,
-        availableBalance: 48250.75, ledgerBalance: 48250.75, status: 'ACTIVE', country: 'GB',
-        branch_name: 'Canary Wharf Corporate Hub', institution: 'Coralgenz Global India Pvt Ltd', ifsc_swift: 'CGLBGB2LXXX', sort_code: '40-05-15',
-        isFavourite: true, favourite_order: 2,
-      },
-      {
         id: 'acc-gb-2', organisation_id: 'org-meridian-in', account_number: '400515-77192044',
-        maskedAccountNumber: '•••• •••• 2044', account_name: 'GBP Corporate Disbursements',
-        account_type: 'CURRENT', currency: 'GBP', available_balance: 9840.20, ledger_balance: 9840.20,
-        availableBalance: 9840.20, ledgerBalance: 9840.20, status: 'ACTIVE', country: 'GB',
+        maskedAccountNumber: '•••• •••• 2044', account_name: 'GBP EEFC Settlement',
+        account_type: 'CURRENT', currency: 'GBP', available_balance: 0.00, ledger_balance: 0.00,
+        availableBalance: 0.00, ledgerBalance: 0.00, status: 'ACTIVE', country: 'GB',
         branch_name: 'Canary Wharf Corporate Hub', institution: 'Coralgenz Global India Pvt Ltd', ifsc_swift: 'CGLBGB2LXXX', sort_code: '40-05-15',
-        isFavourite: false, favourite_order: 4,
-      },
-      {
-        id: 'acc-gb-td', organisation_id: 'org-meridian-in', account_number: '400515-55910238',
-        maskedAccountNumber: '•••• •••• 0238', account_name: 'Sterling Money Market Reserve',
-        account_type: 'FIXED_DEPOSIT', currency: 'GBP', available_balance: 25000.00, ledger_balance: 25000.00,
-        availableBalance: 25000.00, ledgerBalance: 25000.00, status: 'ACTIVE', country: 'GB',
-        branch_name: 'Canary Wharf Corporate Hub', institution: 'Coralgenz Global India Pvt Ltd', ifsc_swift: 'CGLBGB2LXXX', sort_code: '40-05-15',
-        isFavourite: false, favourite_order: 5,
+        isFavourite: false, favourite_order: 2,
       },
       {
         id: 'acc-usd-1', organisation_id: 'org-meridian-in', account_number: '400515-99201485',
         maskedAccountNumber: '•••• •••• 1485', account_name: 'USD EEFC Trade Account',
-        account_type: 'FOREIGN_CURRENCY', currency: 'USD', available_balance: 12450.00, ledger_balance: 12450.00,
-        availableBalance: 12450.00, ledgerBalance: 12450.00, status: 'ACTIVE', country: 'US',
+        account_type: 'FOREIGN_CURRENCY', currency: 'USD', available_balance: 0.00, ledger_balance: 0.00,
+        availableBalance: 0.00, ledgerBalance: 0.00, status: 'ACTIVE', country: 'US',
         branch_name: 'New York Clearing Desk', institution: 'Coralgenz Global India Pvt Ltd', ifsc_swift: 'CGLBUS33XXX',
-        isFavourite: true, favourite_order: 3,
+        isFavourite: false, favourite_order: 3,
       },
       {
         id: 'acc-eur-1', organisation_id: 'org-meridian-in', account_number: 'DE89-3704-0044-0532',
-        maskedAccountNumber: '•••• •••• 0532', account_name: 'Euro SEPA Treasury Pool',
-        account_type: 'TREASURY', currency: 'EUR', available_balance: 142850.40, ledger_balance: 148200.40,
-        availableBalance: 142850.40, ledgerBalance: 148200.40, status: 'ACTIVE', country: 'DE',
+        maskedAccountNumber: '•••• •••• 0532', account_name: 'Euro SEPA Settlement Pool',
+        account_type: 'TREASURY', currency: 'EUR', available_balance: 0.00, ledger_balance: 0.00,
+        availableBalance: 0.00, ledgerBalance: 0.00, status: 'ACTIVE', country: 'DE',
         branch_name: 'Frankfurt Corporate Hub', institution: 'Coralgenz Global India Pvt Ltd', ifsc_swift: 'CGLBDEFFXXX', iban: 'DE89370400440532013000',
-        isFavourite: false, favourite_order: 6,
+        isFavourite: false, favourite_order: 4,
       },
     ],
     payments: [
@@ -220,10 +203,10 @@ function getInitialState(): SandboxState {
     rdcDeposits: [],
     securityCodes: {},
     pinMap: {
-      premier_user: '123456',
-      corp_initiator: '123456',
-      corp_authoriser: '123456',
-      corp_viewer: '123456',
+      'coralgenz global': '002831',
+      corp_initiator: '002831',
+      corp_authoriser: '002831',
+      corp_viewer: '002831',
     },
     resetCodes: {},
   };
@@ -246,23 +229,29 @@ function saveState(s: SandboxState) {
 }
 
 const USERS: Record<string, { fullName: string; role: string; password: string; orgId: string }> = {
-  premier_user: { fullName: 'Karthick Krishna M S', role: 'ORG_ADMIN', password: 'Password@123', orgId: 'org-meridian-in' },
+  'coralgenz global': { fullName: 'Karthick Krishna M S', role: 'ORG_ADMIN', password: 'Password@123', orgId: 'org-meridian-in' },
   corp_initiator: { fullName: 'Claire Beaumont', role: 'PAYMENT_INITIATOR', password: 'CorpPass@2026', orgId: 'org-meridian-in' },
   corp_authoriser: { fullName: 'Rajiv Malhotra', role: 'AUTHORISER', password: 'CorpPass@2026', orgId: 'org-meridian-in' },
   corp_viewer: { fullName: 'Hannah Lindqvist', role: 'FINANCE_VIEWER', password: 'CorpPass@2026', orgId: 'org-meridian-in' },
 };
 
+function resolveUserKey(input: string): string | undefined {
+  const trimmed = String(input || '').trim().toLowerCase();
+  return Object.keys(USERS).find((k) => k.toLowerCase() === trimmed);
+}
+
 function currentProfile() {
-  const uname = sessionStorage.getItem('hsbc_cnet_sbx_user') || 'premier_user';
-  const u = USERS[uname] || USERS.premier_user;
+  const uname = sessionStorage.getItem('hsbc_cnet_sbx_user') || 'coralgenz global';
+  const resolved = resolveUserKey(uname) || 'coralgenz global';
+  const u = USERS[resolved];
   const st = loadState();
   const org = st.organisations.find((o) => o.id === u.orgId) || st.organisations[0];
   return {
-    id: `user-${uname}`,
-    username: uname,
+    id: `user-${resolved.replace(/\s+/g, '_')}`,
+    username: resolved,
     customer_id: 'GB4490182',
     full_name: u.fullName,
-    email: uname === 'premier_user' ? 'karthick.krishna@coralgenz.com' : `${uname}@coralgenz.com`,
+    email: resolved === 'coralgenz global' ? 'karthick.krishna@coralgenz.com' : `${resolved}@coralgenz.com`,
     phone: '+44 7700 900821',
     role: u.role,
     organisationId: org.id,
@@ -290,9 +279,9 @@ export async function handleSandboxRequest(pathWithQuery: string, options: Reque
   }
 
   if (path === '/api/auth/lookup') {
-    const id = String(body.identifier || '').trim();
-    const u = USERS[id];
-    if (!u) throw new Error('Username not recognised. Try premier_user, corp_initiator, or corp_authoriser.');
+    const id = resolveUserKey(body.identifier || '');
+    const u = id ? USERS[id] : undefined;
+    if (!id || !u) throw new Error('Username not recognised. Try coralgenz global, corp_initiator, or corp_authoriser.');
     return {
       success: true,
       profile: {
@@ -306,10 +295,10 @@ export async function handleSandboxRequest(pathWithQuery: string, options: Reque
   }
 
   if (path === '/api/auth/login' || path === '/api/auth/login-pin' || path === '/api/auth/login-security-code') {
-    const id = String(body.identifier || '').trim();
-    const u = USERS[id];
-    if (!u) throw new Error('Invalid credentials.');
-    const expectedPin = state.pinMap?.[id] || '123456';
+    const id = resolveUserKey(body.identifier || '');
+    const u = id ? USERS[id] : undefined;
+    if (!id || !u) throw new Error('Invalid credentials.');
+    const expectedPin = state.pinMap?.[id] || '002831';
     if (path === '/api/auth/login' && body.password !== u.password) throw new Error('Incorrect password.');
     if (path === '/api/auth/login-pin' && body.pin !== expectedPin) throw new Error('Incorrect Mobile Security PIN.');
     if (path === '/api/auth/login-security-code' && state.securityCodes[id] !== body.code) throw new Error('Invalid or expired security code.');
@@ -319,14 +308,15 @@ export async function handleSandboxRequest(pathWithQuery: string, options: Reque
 
   if (path === '/api/auth/security-code/generate') {
     const code = String(Math.floor(10000000 + Math.random() * 89999999));
-    state.securityCodes[body.identifier || 'premier_user'] = code;
+    const id = resolveUserKey(body.identifier || '') || 'coralgenz global';
+    state.securityCodes[id] = code;
     saveState(state);
     return { success: true, code, ttlSeconds: 120, expiresAt: new Date(Date.now() + 120000).toISOString() };
   }
 
   if (path === '/api/auth/pin/verify') {
     const prof = currentProfile();
-    const expectedPin = state.pinMap?.[prof.username] || '123456';
+    const expectedPin = state.pinMap?.[prof.username] || '002831';
     if (body.pin !== expectedPin) throw new Error('Incorrect 6-digit Security PIN.');
     return { success: true, reauthToken: 'sbx-stepup' };
   }
@@ -334,7 +324,7 @@ export async function handleSandboxRequest(pathWithQuery: string, options: Reque
   if (path === '/api/auth/pin/set' || path === '/api/auth/pin/change') {
     const prof = currentProfile();
     if (path === '/api/auth/pin/change') {
-      const expectedPin = state.pinMap?.[prof.username] || '123456';
+      const expectedPin = state.pinMap?.[prof.username] || '002831';
       if (body.currentPin !== expectedPin) throw new Error('Current Mobile Security PIN is incorrect.');
     }
     state.pinMap[prof.username] = String(body.newPin);

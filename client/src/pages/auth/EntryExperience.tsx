@@ -106,8 +106,10 @@ export const EntryExperience: React.FC = () => {
   // Remembered usernames on this browser (usernames only, never secrets/PINs)
   const [rememberedUsers, setRememberedUsers] = useState<string[]>(() => {
     try {
-      const raw = sessionStorage.getItem('hsbc_cnet_recent_ids');
-      return raw ? JSON.parse(raw) : [];
+      sessionStorage.removeItem('hsbc_cnet_recent_ids');
+      const raw = sessionStorage.getItem('hsbc_cnet_recent_ids_v2');
+      const parsed: string[] = raw ? JSON.parse(raw) : [];
+      return parsed.filter((u) => u.toLowerCase() !== 'premier_user');
     } catch {
       return [];
     }
@@ -204,11 +206,11 @@ export const EntryExperience: React.FC = () => {
 
   const rememberUsername = (id: string) => {
     const clean = id.trim();
-    if (!clean) return;
+    if (!clean || clean.toLowerCase() === 'premier_user') return;
     const next = [clean, ...rememberedUsers.filter((u) => u !== clean)].slice(0, 4);
     setRememberedUsers(next);
     try {
-      sessionStorage.setItem('hsbc_cnet_recent_ids', JSON.stringify(next));
+      sessionStorage.setItem('hsbc_cnet_recent_ids_v2', JSON.stringify(next));
     } catch {
       // ignore
     }
@@ -217,16 +219,16 @@ export const EntryExperience: React.FC = () => {
   // 1. Application Launch Screen — Exact match to uploaded Splash Screen image
   if (phase === 'LAUNCHING') {
     return (
-      <main className="relative min-h-dvh bg-[#0F151B] flex flex-col items-center justify-center p-6 overflow-hidden">
+      <main className="relative min-h-dvh bg-[#0D131A] flex flex-col items-center justify-center p-6 overflow-hidden">
         <img
           src="/welcome-bg.jpg"
           alt=""
           aria-hidden="true"
-          className="absolute inset-0 w-full h-full object-cover"
+          className="absolute inset-0 w-full h-full object-cover brightness-105 contrast-105"
         />
         <div
           aria-hidden="true"
-          className="absolute inset-0 bg-gradient-to-b from-[#0A0F14]/25 via-[#0A0F14]/15 to-[#0A0F14]/45"
+          className="absolute inset-0 bg-gradient-to-b from-[#090E14]/25 via-transparent to-[#090E14]/40"
         />
         <motion.div
           initial={{ opacity: 0, scale: 0.98 }}
@@ -234,13 +236,10 @@ export const EntryExperience: React.FC = () => {
           transition={{ duration: 0.45 }}
           className="relative z-10 flex items-center justify-center gap-3.5"
         >
-          <span
-            className="text-[36px] sm:text-[44px] font-normal tracking-wide text-white leading-none drop-shadow-[0_2px_10px_rgba(0,0,0,0.65)]"
-            style={{ fontFamily: 'Georgia, "Times New Roman", serif' }}
-          >
+          <span className="font-hsbc-serif text-[38px] sm:text-[46px] font-normal tracking-[0.02em] text-white leading-none drop-shadow-[0_2px_12px_rgba(0,0,0,0.75)]">
             HSBC
           </span>
-          <BrandMark size={72} />
+          <BrandMark size={70} />
         </motion.div>
       </main>
     );
@@ -624,29 +623,29 @@ export const EntryExperience: React.FC = () => {
   };
 
   // =========================================================================
-  // WELCOME SCREEN — Replicating HSBCnet Mobile Dark Photographic Welcome Layout
+  // WELCOME SCREEN — HSBCnet Lighting Roads + Official Univers/Roboto Fonts
   // =========================================================================
   if (step === 'WELCOME') {
     return (
-      <main className="relative min-h-dvh flex flex-col justify-between bg-[#202A30] text-white overflow-hidden">
-        {/* Consistent Blurred Night Highway Background */}
+      <main className="relative min-h-dvh flex flex-col justify-between bg-[#111922] text-white overflow-hidden">
+        {/* Crisp Lighting Roads Photographic Background */}
         <img
           src="/welcome-bg.jpg"
           alt=""
           aria-hidden="true"
-          className="absolute inset-0 w-full h-full object-cover blur-[5px] scale-105 opacity-70"
+          className="absolute inset-0 w-full h-full object-cover blur-[1.5px] scale-[1.02] opacity-85"
         />
         <div
           aria-hidden="true"
-          className="absolute inset-0 bg-gradient-to-b from-[#202A30]/85 via-[#263640]/55 to-[#202A30]/92"
+          className="absolute inset-0 bg-gradient-to-b from-[#0B1218]/68 via-[#111A22]/45 to-[#0A1016]/82"
         />
 
-        {/* Top Identity Header Bar — Logo ONLY without name on Welcome username screen */}
-        <header className="relative z-10 w-full">
-          <div className="max-w-md mx-auto px-4 pt-4 pb-1 flex items-center justify-between">
+        {/* Top Identity Header Bar — Dark translucent layer matching bottom bar, Logo ONLY */}
+        <header className="relative z-10 w-full bg-[#202A30]/85 border-b border-white/15 backdrop-blur-sm">
+          <div className="max-w-md mx-auto px-4 py-3 flex items-center justify-between">
             <div className="w-10" aria-hidden="true" />
             <div className="flex items-center justify-center">
-              <BrandMark size={52} />
+              <BrandMark size={48} />
             </div>
             <button
               type="button"
@@ -679,10 +678,10 @@ export const EntryExperience: React.FC = () => {
               </div>
             )}
 
-            <h1 className="text-[28px] sm:text-[32px] font-light text-center tracking-tight text-white">
-              Welcome to <span className="italic font-normal">{BANK_CONFIG.appName}</span>
+            <h1 className="text-[30px] sm:text-[34px] font-light text-center tracking-[-0.01em] text-white drop-shadow-sm">
+              Welcome to HSBCnet
             </h1>
-            <p className="mt-2 text-xs text-center text-white/75">
+            <p className="mt-2 text-xs font-light text-center text-white/80">
               Enterprise treasury, payments &amp; corporate authorisations
             </p>
 
@@ -807,11 +806,11 @@ export const EntryExperience: React.FC = () => {
             <div className="p-3 bg-[#F4F5F6] border border-[#D9DEE1] rounded-[2px]">
               <p className="font-semibold text-[#252B30] mb-1">Sandbox Test Credentials</p>
               <ul className="space-y-1">
-                <li><code>premier_user</code> / <code>Password@123</code> (Org Admin)</li>
+                <li><code>coralgenz global</code> / <code>Password@123</code> (Org Admin)</li>
                 <li><code>corp_initiator</code> / <code>CorpPass@2026</code> (Initiator)</li>
                 <li><code>corp_authoriser</code> / <code>CorpPass@2026</code> (Authoriser)</li>
                 <li><code>corp_viewer</code> / <code>CorpPass@2026</code> (Finance Viewer)</li>
-                <li>Default 6-digit Mobile Security PIN: <code>123456</code></li>
+                <li>Default 6-digit Mobile Security PIN: <code>002831</code></li>
               </ul>
             </div>
           </div>

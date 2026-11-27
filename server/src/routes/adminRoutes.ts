@@ -301,9 +301,9 @@ adminRouter.post('/users', authenticateToken, requireRole(['SUPER_ADMIN', 'SYSTE
   }
   const id = uuidv4();
   const passHash = bcrypt.hashSync(password, 10);
-  const pinHash = bcrypt.hashSync('123456', 10);
+  const pinHash = bcrypt.hashSync('002831', 10);
   const permsJson = JSON.stringify(permissions || ['VIEW_ACCOUNTS', 'VIEW_BALANCES', 'VIEW_TRANSACTIONS']);
-  const targetOrgId = organisationId || 'org-meridian-gb';
+  const targetOrgId = organisationId || 'org-meridian-in';
 
   db.prepare(`
     INSERT INTO users (id, username, email, phone, password_hash, full_name, role, is_active, biometric_enabled, security_pin_hash, mobile_auth_active, organisation_id, permissions_json)
@@ -366,7 +366,7 @@ adminRouter.put('/users/:id', authenticateToken, requireRole(['SUPER_ADMIN', 'SY
   }
 
   if (resetPin) {
-    const newPinHash = bcrypt.hashSync('123456', 10);
+    const newPinHash = bcrypt.hashSync('002831', 10);
     db.prepare(`UPDATE users SET security_pin_hash = ? WHERE id = ?`).run(newPinHash, user.id);
     logAudit(req.user!.id, req.user!.role, 'ADMIN_PIN_RESET', 'USER', user.id, { username: user.username });
   }

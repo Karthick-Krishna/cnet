@@ -17,6 +17,13 @@ export function formatINR(amount: number, hide = false): string {
   return `${isNegative ? '-' : ''}₹${formatted}`;
 }
 
+export function formatInrCrores(amount: number, hide = false): string {
+  if (hide) return '•••• Cr';
+  if (amount === undefined || amount === null || isNaN(amount)) return '0.0000 Cr';
+  const cr = amount / 10000000;
+  return `${Number(cr.toFixed(4))} Cr`;
+}
+
 export function formatFinancialCurrency(amount: number, currency: string = 'GBP', hide = false): string {
   if (hide) return '••••••••';
   if (amount === undefined || amount === null || isNaN(amount)) return `${currency} 0.00`;

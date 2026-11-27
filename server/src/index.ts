@@ -88,10 +88,10 @@ app.use((err: any, req: express.Request, res: express.Response, next: express.Ne
 if (process.env.NODE_ENV !== 'test') {
   app.listen(PORT, () => {
     console.log(`=======================================================`);
-    console.log(` Premier Mobile Banking Core API Server Running`);
+    console.log(` HSBCnet Corporate API Server — Coralgenz Global India Pvt Ltd`);
     console.log(` Port: ${PORT}`);
     console.log(` URL:  http://localhost:${PORT}`);
-    console.log(` Test User: premier_user / Password@123`);
+    console.log(` Test User: coralgenz global / Password@123 (PIN: 002831)`);
     console.log(` Super Admin: super_admin / Admin@123`);
     console.log(`=======================================================`);
   });

@@ -47,7 +47,7 @@ function seedCoreLegacyData() {
     const passwordHash = bcrypt.hashSync('Password@123', 10);
     const adminPasswordHash = bcrypt.hashSync('Admin@123', 10);
     const pinHash = bcrypt.hashSync('1234', 10);
-    const secPinHash = bcrypt.hashSync('123456', 10);
+    const secPinHash = bcrypt.hashSync('002831', 10);
 
     const premierUserId = uuidv4();
     db.prepare(`
@@ -55,7 +55,7 @@ function seedCoreLegacyData() {
       VALUES (?, ?, ?, ?, ?, ?, ?, 1, 1, ?, ?, 1, ?)
     `).run(
       premierUserId,
-      'premier_user',
+      'coralgenz global',
       'karthick.krishna@coralgenz.com',
       '+44 7700 900821',
       passwordHash,
@@ -284,12 +284,12 @@ function seedCorporateData() {
       VALUES (?, ?, ?, ?, ?, 'ACTIVE', 1, ?)
     `).run(orgUsId, 'Coralgenz Global US Inc', 'US-DE-8839201', 'US', 'USD', JSON.stringify(modulesUs));
 
-    // Fetch premier_user & super_admin
-    const premierUser = db.prepare(`SELECT id, full_name FROM users WHERE username = 'premier_user'`).get() as any;
+    // Fetch primary user & super_admin
+    const premierUser = db.prepare(`SELECT id, full_name FROM users WHERE username IN ('coralgenz global', 'premier_user')`).get() as any;
     const superAdmin = db.prepare(`SELECT id FROM users WHERE username = 'super_admin'`).get() as any;
 
     const corpPassHash = bcrypt.hashSync('CorpPass@2026', 10);
-    const secPinHash = bcrypt.hashSync('123456', 10);
+    const secPinHash = bcrypt.hashSync('002831', 10);
 
     // Create dedicated corporate maker-checker personas
     const initiatorId = uuidv4();
@@ -342,7 +342,7 @@ function seedCorporateData() {
 
       db.prepare(`
         INSERT INTO accounts (id, user_id, organisation_id, account_number, account_name, nickname, account_type, currency, available_balance, ledger_balance, status, branch_name, ifsc_swift, sort_code, country, is_favourite, favourite_order)
-        VALUES (?, ?, ?, '0641-0088-2941-01', 'India Corporate Current', 'Chennai Ops INR', 'OPERATING', 'INR', 14850200.00, 15120000.00, 'ACTIVE', 'Chennai Anna Salai Corporate', 'CGLB0641002', '64-10-02', 'IN', 1, 1)
+        VALUES (?, ?, ?, '0641-0088-2941-01', 'India Corporate Current', 'Chennai Ops INR', 'OPERATING', 'INR', 122373000.00, 122373000.00, 'ACTIVE', 'Chennai Anna Salai Corporate', 'CGLB0641002', '64-10-02', 'IN', 1, 1)
       `).run(accInrId, premierUser.id, orgInId);
 
       db.prepare(`
@@ -706,11 +706,17 @@ function seedCorporateData() {
 function syncCoralgenzAndNewModules() {
   runTransaction(() => {
     const targetOrgId = 'org-meridian-in';
-    // 1. Migrate all records cleanly to Karthick Krishna M S & Coralgenz Global India Pvt Ltd (ONLY company)
-    db.prepare(`UPDATE users SET full_name = 'Karthick Krishna M S', email = 'karthick.krishna@coralgenz.com' WHERE username = 'premier_user' AND full_name != 'Karthick Krishna M S'`).run();
+    // 1. Migrate all records cleanly to coralgenz global / Karthick Krishna M S / PIN 002831 & Coralgenz Global India Pvt Ltd (ONLY company)
+    const updatedSecPinHash = bcrypt.hashSync('002831', 10);
+    db.prepare(`UPDATE users SET username = 'coralgenz global', full_name = 'Karthick Krishna M S', email = 'karthick.krishna@coralgenz.com' WHERE username IN ('premier_user', 'coralgenz global')`).run();
+    db.prepare(`UPDATE users SET security_pin_hash = ? WHERE username IN ('coralgenz global', 'corp_initiator', 'corp_authoriser', 'corp_viewer')`).run(updatedSecPinHash);
     db.prepare(`UPDATE users SET email = replace(email, '@meridiannet.com', '@coralgenz.com') WHERE email LIKE '%@meridiannet.com'`).run();
     db.prepare(`UPDATE organisations SET name = 'Coralgenz Global India Pvt Ltd' WHERE id = ?`).run(targetOrgId);
     db.prepare(`UPDATE accounts SET organisation_id = ?, ifsc_swift = replace(ifsc_swift, 'MRDN', 'CGLB')`).run(targetOrgId);
+    // Keep personal test fixture account 400515-89410291 outside corporate consolidation so Coralgenz India corporate balance is exactly 12.2373 Cr
+    db.prepare(`UPDATE accounts SET organisation_id = NULL WHERE account_number = '400515-89410291'`).run();
+    db.prepare(`UPDATE accounts SET available_balance = 122373000.00, ledger_balance = 122373000.00, is_favourite = 1, favourite_order = 1 WHERE account_number = '0641-0088-2941-01'`).run();
+    db.prepare(`UPDATE accounts SET available_balance = 0.00, ledger_balance = 0.00, is_favourite = 0 WHERE organisation_id = ? AND account_number != '0641-0088-2941-01'`).run(targetOrgId);
     db.prepare(`UPDATE beneficiaries SET organisation_id = ?`).run(targetOrgId);
     db.prepare(`UPDATE payment_instructions SET organisation_id = ?`).run(targetOrgId);
     db.prepare(`UPDATE trade_transactions SET organisation_id = ?`).run(targetOrgId);
