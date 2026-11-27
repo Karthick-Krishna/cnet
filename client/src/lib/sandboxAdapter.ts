@@ -4,7 +4,7 @@
  * ensuring all HSBC Cnet client workflows remain functional in cloud previews.
  */
 
-const STORAGE_KEY = 'hsbc_cnet_vercel_sandbox_v2';
+const STORAGE_KEY = 'hsbc_cnet_coralgenz_india_v4';
 
 interface SandboxState {
   organisations: any[];
@@ -13,6 +13,12 @@ interface SandboxState {
   transactions: any[];
   beneficiaries: any[];
   trade: any[];
+  templates: any[];
+  virtualAccounts: any[];
+  fileUploads: any[];
+  scfOffers: any[];
+  securities: any[];
+  afdSchedules: any[];
   facilities: any[];
   receivablesDraws: any[];
   receivablesLimits: any[];
@@ -33,11 +39,11 @@ function getInitialState(): SandboxState {
   return {
     organisations: [
       {
-        id: 'org-meridian-gb',
-        name: 'Meridian Global Manufacturing Ltd',
-        registrationNumber: 'UK-RC-09482110',
-        country: 'GB',
-        baseCurrency: 'GBP',
+        id: 'org-meridian-in',
+        name: 'Coralgenz Global India Pvt Ltd',
+        registrationNumber: 'CIN-U72900TN2021PTC',
+        country: 'IN',
+        baseCurrency: 'INR',
         status: 'ACTIVE',
         isSandbox: true,
         role: 'ORG_ADMIN',
@@ -53,82 +59,61 @@ function getInitialState(): SandboxState {
           remoteDepositCapture: true, billPayments: true, selfService: true,
         },
       },
-      {
-        id: 'org-meridian-in',
-        name: 'Meridian Tech India Pvt Ltd',
-        registrationNumber: 'CIN-U72900TN2021PTC',
-        country: 'IN',
-        baseCurrency: 'INR',
-        status: 'ACTIVE',
-        isSandbox: true,
-        role: 'ORG_ADMIN',
-        permissions: [
-          'VIEW_ACCOUNTS', 'VIEW_BALANCES', 'VIEW_TRANSACTIONS', 'CREATE_PAYMENTS',
-          'APPROVE_PAYMENTS', 'REJECT_PAYMENTS', 'MANAGE_BENEFICIARIES',
-          'ACCESS_TRADE_FINANCE', 'ACCESS_RECEIVABLES_FINANCE', 'VIEW_LIQUIDITY',
-          'REQUEST_DOCUMENTS',
-        ],
-        modules: {
-          accounts: true, authorisations: true, payments: true, track: true,
-          liquidity: true, tradeFinance: true, receivablesFinance: true,
-          remoteDepositCapture: false, billPayments: true, selfService: true,
-        },
-      },
     ],
     accounts: [
       {
-        id: 'acc-gb-1', organisation_id: 'org-meridian-gb', account_number: '400515-89410291',
-        maskedAccountNumber: '•••• •••• 0291', account_name: 'GBP Operating Treasury',
-        nickname: 'UK Primary Operating', account_type: 'SAVINGS', currency: 'GBP',
-        available_balance: 48250.75, ledger_balance: 48250.75,
-        availableBalance: 48250.75, ledgerBalance: 48250.75, status: 'ACTIVE', country: 'GB',
-        branch_name: 'Canary Wharf Corporate Hub', institution: 'Meridian Treasury UK', ifsc_swift: 'MRDNGB2LXXX', sort_code: '40-05-15',
+        id: 'acc-in-1', organisation_id: 'org-meridian-in', account_number: '0641-0088-2941-01',
+        maskedAccountNumber: '•••• •••• 4101', account_name: 'India Corporate Current',
+        nickname: 'Chennai Ops INR', account_type: 'OPERATING', currency: 'INR', available_balance: 14850200.00, ledger_balance: 15120000.00,
+        availableBalance: 14850200.00, ledgerBalance: 15120000.00, status: 'ACTIVE', country: 'IN',
+        branch_name: 'Chennai Anna Salai Corporate', institution: 'Coralgenz Global India Pvt Ltd', ifsc_swift: 'CGLB0641002',
         isFavourite: true, favourite_order: 1,
       },
       {
-        id: 'acc-gb-2', organisation_id: 'org-meridian-gb', account_number: '400515-77192044',
-        maskedAccountNumber: '•••• •••• 2044', account_name: 'GBP Corporate Disbursements',
-        account_type: 'CURRENT', currency: 'GBP', available_balance: 9840.20, ledger_balance: 9840.20,
-        availableBalance: 9840.20, ledgerBalance: 9840.20, status: 'ACTIVE', country: 'GB',
-        branch_name: 'Canary Wharf Corporate Hub', institution: 'Meridian Treasury UK', ifsc_swift: 'MRDNGB2LXXX', sort_code: '40-05-15',
+        id: 'acc-gb-1', organisation_id: 'org-meridian-in', account_number: '400515-89410291',
+        maskedAccountNumber: '•••• •••• 0291', account_name: 'GBP Operating Treasury',
+        nickname: 'UK EEFC Settlement', account_type: 'SAVINGS', currency: 'GBP',
+        available_balance: 48250.75, ledger_balance: 48250.75,
+        availableBalance: 48250.75, ledgerBalance: 48250.75, status: 'ACTIVE', country: 'GB',
+        branch_name: 'Canary Wharf Corporate Hub', institution: 'Coralgenz Global India Pvt Ltd', ifsc_swift: 'CGLBGB2LXXX', sort_code: '40-05-15',
         isFavourite: true, favourite_order: 2,
       },
       {
-        id: 'acc-gb-td', organisation_id: 'org-meridian-gb', account_number: '400515-55910238',
-        maskedAccountNumber: '•••• •••• 0238', account_name: 'Sterling Money Market Reserve',
-        account_type: 'FIXED_DEPOSIT', currency: 'GBP', available_balance: 25000.00, ledger_balance: 25000.00,
-        availableBalance: 25000.00, ledgerBalance: 25000.00, status: 'ACTIVE', country: 'GB',
-        branch_name: 'Canary Wharf Corporate Hub', institution: 'Meridian Treasury UK', ifsc_swift: 'MRDNGB2LXXX', sort_code: '40-05-15',
-        isFavourite: false, favourite_order: 5,
-      },
-      {
-        id: 'acc-usd-1', organisation_id: 'org-meridian-gb', account_number: '400515-99201485',
-        maskedAccountNumber: '•••• •••• 1485', account_name: 'USD Trade Nostro Account',
-        account_type: 'FOREIGN_CURRENCY', currency: 'USD', available_balance: 12450.00, ledger_balance: 12450.00,
-        availableBalance: 12450.00, ledgerBalance: 12450.00, status: 'ACTIVE', country: 'US',
-        branch_name: 'New York Clearing Desk', institution: 'Meridian Americas', ifsc_swift: 'MRDNUS33XXX',
-        isFavourite: true, favourite_order: 3,
-      },
-      {
-        id: 'acc-eur-1', organisation_id: 'org-meridian-gb', account_number: 'DE89-3704-0044-0532',
-        maskedAccountNumber: '•••• •••• 0532', account_name: 'Euro SEPA Treasury Pool',
-        account_type: 'TREASURY', currency: 'EUR', available_balance: 142850.40, ledger_balance: 148200.40,
-        availableBalance: 142850.40, ledgerBalance: 148200.40, status: 'ACTIVE', country: 'DE',
-        branch_name: 'Frankfurt Corporate Hub', institution: 'Meridian Continental', ifsc_swift: 'MRDNDEFFXXX', iban: 'DE89370400440532013000',
+        id: 'acc-gb-2', organisation_id: 'org-meridian-in', account_number: '400515-77192044',
+        maskedAccountNumber: '•••• •••• 2044', account_name: 'GBP Corporate Disbursements',
+        account_type: 'CURRENT', currency: 'GBP', available_balance: 9840.20, ledger_balance: 9840.20,
+        availableBalance: 9840.20, ledgerBalance: 9840.20, status: 'ACTIVE', country: 'GB',
+        branch_name: 'Canary Wharf Corporate Hub', institution: 'Coralgenz Global India Pvt Ltd', ifsc_swift: 'CGLBGB2LXXX', sort_code: '40-05-15',
         isFavourite: false, favourite_order: 4,
       },
       {
-        id: 'acc-in-1', organisation_id: 'org-meridian-in', account_number: '0641-0088-2941-01',
-        maskedAccountNumber: '•••• •••• 4101', account_name: 'India Corporate Current',
-        account_type: 'OPERATING', currency: 'INR', available_balance: 14850200.00, ledger_balance: 15120000.00,
-        availableBalance: 14850200.00, ledgerBalance: 15120000.00, status: 'ACTIVE', country: 'IN',
-        branch_name: 'Chennai Anna Salai Corporate', institution: 'Meridian India', ifsc_swift: 'MRDN0641002',
-        isFavourite: true, favourite_order: 1,
+        id: 'acc-gb-td', organisation_id: 'org-meridian-in', account_number: '400515-55910238',
+        maskedAccountNumber: '•••• •••• 0238', account_name: 'Sterling Money Market Reserve',
+        account_type: 'FIXED_DEPOSIT', currency: 'GBP', available_balance: 25000.00, ledger_balance: 25000.00,
+        availableBalance: 25000.00, ledgerBalance: 25000.00, status: 'ACTIVE', country: 'GB',
+        branch_name: 'Canary Wharf Corporate Hub', institution: 'Coralgenz Global India Pvt Ltd', ifsc_swift: 'CGLBGB2LXXX', sort_code: '40-05-15',
+        isFavourite: false, favourite_order: 5,
+      },
+      {
+        id: 'acc-usd-1', organisation_id: 'org-meridian-in', account_number: '400515-99201485',
+        maskedAccountNumber: '•••• •••• 1485', account_name: 'USD EEFC Trade Account',
+        account_type: 'FOREIGN_CURRENCY', currency: 'USD', available_balance: 12450.00, ledger_balance: 12450.00,
+        availableBalance: 12450.00, ledgerBalance: 12450.00, status: 'ACTIVE', country: 'US',
+        branch_name: 'New York Clearing Desk', institution: 'Coralgenz Global India Pvt Ltd', ifsc_swift: 'CGLBUS33XXX',
+        isFavourite: true, favourite_order: 3,
+      },
+      {
+        id: 'acc-eur-1', organisation_id: 'org-meridian-in', account_number: 'DE89-3704-0044-0532',
+        maskedAccountNumber: '•••• •••• 0532', account_name: 'Euro SEPA Treasury Pool',
+        account_type: 'TREASURY', currency: 'EUR', available_balance: 142850.40, ledger_balance: 148200.40,
+        availableBalance: 142850.40, ledgerBalance: 148200.40, status: 'ACTIVE', country: 'DE',
+        branch_name: 'Frankfurt Corporate Hub', institution: 'Coralgenz Global India Pvt Ltd', ifsc_swift: 'CGLBDEFFXXX', iban: 'DE89370400440532013000',
+        isFavourite: false, favourite_order: 6,
       },
     ],
     payments: [
       {
-        id: 'pay-1', reference: 'PAY-2026-44102', organisation_id: 'org-meridian-gb',
+        id: 'pay-1', reference: 'PAY-2026-44102', organisation_id: 'org-meridian-in',
         initiator_id: 'user-corp_initiator', initiator_name: 'Claire Beaumont', category: 'PRIORITY_PAYMENT',
         debit_account_id: 'acc-gb-1', debit_account_name: 'GBP Operating Treasury', debit_currency: 'GBP',
         beneficiary_name: 'Nordic Components GmbH', beneficiary_account: 'DE89370400440532013000',
@@ -142,7 +127,7 @@ function getInitialState(): SandboxState {
         created_at: now, updated_at: now,
       },
       {
-        id: 'pay-2', reference: 'PAY-2026-44115', organisation_id: 'org-meridian-gb',
+        id: 'pay-2', reference: 'PAY-2026-44115', organisation_id: 'org-meridian-in',
         initiator_id: 'user-corp_initiator', initiator_name: 'Claire Beaumont', category: 'SEPA_PAYMENT',
         debit_account_id: 'acc-eur-1', debit_account_name: 'Euro SEPA Treasury Pool', debit_currency: 'EUR',
         beneficiary_name: 'Nordic Components GmbH', beneficiary_account: 'DE89370400440532013000',
@@ -155,7 +140,7 @@ function getInitialState(): SandboxState {
         created_at: now, updated_at: now,
       },
       {
-        id: 'pay-3', reference: 'PAY-2026-43980', organisation_id: 'org-meridian-gb',
+        id: 'pay-3', reference: 'PAY-2026-43980', organisation_id: 'org-meridian-in',
         initiator_id: 'user-corp_initiator', initiator_name: 'Claire Beaumont', category: 'PRIORITY_PAYMENT',
         debit_account_id: 'acc-gb-1', debit_account_name: 'GBP Operating Treasury', debit_currency: 'GBP',
         beneficiary_name: 'Thames Logistics Partners Ltd', beneficiary_account: '200412-99014522',
@@ -176,18 +161,45 @@ function getInitialState(): SandboxState {
       { id: 'ben-2', name: 'Thames Logistics Partners Ltd', nickname: 'UK Freight', account_number: '200412-99014522', bank_name: 'Barclays Corporate UK', ifsc_swift: 'BARCGB22XXX', transfer_limit: 150000, is_favorite: 1, country: 'GB', currency: 'GBP', activation_status: 'ACTIVE' },
     ],
     trade: [
-      { id: 'trd-1', reference: 'TRD-2026-11092', organisation_id: 'org-meridian-gb', trade_category: 'IMPORT_DC', direction: 'IMPORT', counterparty: 'Shenzhen Precision Electronics Co.', amount: 185000, currency: 'USD', status: 'AWAITING_AUTHORISATION', pending_action: 'Authorise Import Documentary Credit', documents: [{ id: 'd1', name: 'Commercial_Invoice_SZ8821.pdf', size: '420 KB' }], timeline: [{ id: 't1', label: 'Awaiting Corporate Sign-Off', description: 'Pending trade authoriser approval', timestamp: now, state: 'CURRENT' }] },
-      { id: 'trd-2', reference: 'TRD-2026-10944', organisation_id: 'org-meridian-gb', trade_category: 'IMPORT_PRESENTATION', direction: 'IMPORT', counterparty: 'Bavaria Industrial Motors GmbH', amount: 94000, currency: 'EUR', status: 'AWAITING_AUTHORISATION', pending_action: 'Accept Import Presentation Documents', documents: [{ id: 'd2', name: 'Packing_List_BV991.pdf', size: '215 KB' }], timeline: [{ id: 't1', label: 'Documents Presented', description: 'Awaiting presentation authorisation', timestamp: now, state: 'CURRENT' }] },
-      { id: 'trd-3', reference: 'TRD-2026-10810', organisation_id: 'org-meridian-gb', trade_category: 'GUARANTEE_STANDBY_DC', direction: 'EXPORT', counterparty: 'Nordic Infrastructure AB', amount: 120000, currency: 'EUR', status: 'AWAITING_AUTHORISATION', pending_action: 'Approve Standby Guarantee Extension', documents: [{ id: 'd3', name: 'Guarantee_Draft_SE44.pdf', size: '310 KB' }], timeline: [{ id: 't1', label: 'Amendment Prepared', description: 'Pending corporate approval', timestamp: now, state: 'CURRENT' }] },
+      { id: 'trd-1', reference: 'TRD-2026-11092', organisation_id: 'org-meridian-in', trade_category: 'IMPORT_DC', direction: 'IMPORT', counterparty: 'Shenzhen Precision Electronics Co.', amount: 185000, currency: 'USD', status: 'AWAITING_AUTHORISATION', pending_action: 'Authorise Import Documentary Credit', documents: [{ id: 'd1', name: 'Commercial_Invoice_SZ8821.pdf', size: '420 KB' }], timeline: [{ id: 't1', label: 'Awaiting Corporate Sign-Off', description: 'Pending trade authoriser approval', timestamp: now, state: 'CURRENT' }] },
+      { id: 'trd-2', reference: 'TRD-2026-10944', organisation_id: 'org-meridian-in', trade_category: 'IMPORT_PRESENTATION', direction: 'IMPORT', counterparty: 'Bavaria Industrial Motors GmbH', amount: 94000, currency: 'EUR', status: 'AWAITING_AUTHORISATION', pending_action: 'Accept Import Presentation Documents', documents: [{ id: 'd2', name: 'Packing_List_BV991.pdf', size: '215 KB' }], timeline: [{ id: 't1', label: 'Documents Presented', description: 'Awaiting presentation authorisation', timestamp: now, state: 'CURRENT' }] },
+      { id: 'trd-3', reference: 'TRD-2026-10810', organisation_id: 'org-meridian-in', trade_category: 'GUARANTEE_STANDBY_DC', direction: 'EXPORT', counterparty: 'Nordic Infrastructure AB', amount: 120000, currency: 'EUR', status: 'AWAITING_AUTHORISATION', pending_action: 'Approve Standby Guarantee Extension (BL-CGLB-88412)', documents: [{ id: 'd3', name: 'Guarantee_Draft_SE44.pdf', size: '310 KB' }], timeline: [{ id: 't1', label: 'Amendment Prepared', description: 'Pending corporate approval', timestamp: now, state: 'CURRENT' }] },
+      { id: 'trd-4', reference: 'TRD-2026-10755', organisation_id: 'org-meridian-in', trade_category: 'TRADE_LOAN', direction: 'IMPORT', counterparty: 'Taiwan Semiconductor Foundry Co.', amount: 245000, currency: 'USD', status: 'AWAITING_AUTHORISATION', pending_action: 'Authorise 90-Day Import Loan (DHL-77492011)', documents: [{ id: 'd4', name: 'Airway_Bill_DHL77492011.pdf', size: '540 KB' }], timeline: [{ id: 't1', label: 'Loan Application', description: 'Pending authoriser verification', timestamp: now, state: 'CURRENT' }] },
+      { id: 'trd-5', reference: 'TRD-2026-10640', organisation_id: 'org-meridian-in', trade_category: 'EXPORT_DC', direction: 'EXPORT', counterparty: 'Emirates Industrial Holdings LLC', amount: 310000, currency: 'USD', status: 'ISSUED', pending_action: 'Export Advised DC — Shipment Confirmed (BL-CGLB-91004)', documents: [{ id: 'd5', name: 'Export_LC_Advice_DXB.pdf', size: '485 KB' }], timeline: [{ id: 't1', label: 'Shipment Advised', description: 'BL-CGLB-91004 cleared Customs', timestamp: now, state: 'COMPLETED' }] },
+    ],
+    templates: [
+      { id: 'tmpl-1', organisation_id: 'org-meridian-in', name: 'EU Supplier Monthly Retainer (Nordic Components)', category: 'SEPA_PAYMENT', template_type: 'RESTRICTED', debit_account_id: 'acc-gb-1', beneficiary_name: 'Nordic Components GmbH', beneficiary_account: 'DE89370400440532013000', beneficiary_bank: 'Deutsche Bank AG', destination_country: 'DE', swift_bic: 'DEUTDEFFXXX', currency: 'EUR', default_amount: 14500, reference_note: 'Coralgenz Global Monthly Actuator Supply', status: 'ACTIVE' },
+      { id: 'tmpl-2', organisation_id: 'org-meridian-in', name: 'UK Haulage Clearing Template', category: 'PRIORITY_PAYMENT', template_type: 'GENERAL', debit_account_id: 'acc-gb-1', beneficiary_name: 'Thames Logistics Partners Ltd', beneficiary_account: '200412-99014522', beneficiary_bank: 'Barclays Corporate UK', destination_country: 'GB', swift_bic: 'BARCGB22XXX', currency: 'GBP', default_amount: 3420, reference_note: 'UK Port Logistics Invoice', status: 'ACTIVE' },
+    ],
+    virtualAccounts: [
+      { id: 'va-1', organisation_id: 'org-meridian-in', parent_account_id: 'acc-in-1', virtual_number: 'VA-IN-900101', account_name: 'Coralgenz Global India Enterprise Collections', region: 'India & APAC', business_line: 'B2B Enterprise Billing', currency: 'INR', allocated_balance: 1842000.50, reconciled_count: 42, status: 'ACTIVE' },
+      { id: 'va-2', organisation_id: 'org-meridian-in', parent_account_id: 'acc-gb-1', virtual_number: 'VA-GB-900102', account_name: 'Coralgenz Global Export EEFC Settlement', region: 'India / UK', business_line: 'Digital Commerce', currency: 'GBP', allocated_balance: 9310.00, reconciled_count: 118, status: 'ACTIVE' },
+      { id: 'va-3', organisation_id: 'org-meridian-in', parent_account_id: 'acc-eur-1', virtual_number: 'VA-EU-900204', account_name: 'Coralgenz Global DACH Distributor Receipts', region: 'Germany', business_line: 'Industrial Hardware', currency: 'EUR', allocated_balance: 44800.00, reconciled_count: 27, status: 'ACTIVE' },
+    ],
+    fileUploads: [
+      { id: 'up-1', reference: 'BATCH-2026-8801', filename: 'coralgenz_india_payroll_nov2026.xml', format: 'ISO20022_XML', total_count: 24, valid_count: 24, error_count: 0, total_amount: 42850, currency: 'GBP', status: 'SETTLED', validationSummary: ['pain.001.001.03 schema validated', '24 beneficiary checks passed'] },
+    ],
+    scfOffers: [
+      { id: 'scf-1', reference: 'SCF-2026-4101', supplier_name: 'Nordic Components GmbH', invoice_number: 'INV-NC-98241', invoice_amount: 64000, currency: 'EUR', maturity_date: '2027-01-25', discount_rate_pct: 3.15, net_settlement: 63664, early_pay_status: 'OFFER_AVAILABLE' },
+      { id: 'scf-2', reference: 'SCF-2026-4102', supplier_name: 'Shenzhen Precision Electronics Co.', invoice_number: 'INV-SZ-55410', invoice_amount: 112500, currency: 'USD', maturity_date: '2027-02-10', discount_rate_pct: 3.45, net_settlement: 111724, early_pay_status: 'OFFER_AVAILABLE' },
+    ],
+    securities: [
+      { id: 'sec-1', isin: 'GB00BM8Z2V59', security_name: 'UK Treasury Gilt 4.125% Jan 2027', asset_class: 'SOVEREIGN_BOND', custodian_account: 'HSS-CGLB-CUST-01', quantity: 150000, market_value: 149250, currency: 'GBP', accrued_income: 2180.40, corp_action_status: 'NONE', corp_action_detail: 'Coupon due 29 Jan 2027' },
+      { id: 'sec-2', isin: 'US912828YV68', security_name: 'US Treasury Note 3.875% 2027', asset_class: 'SOVEREIGN_BOND', custodian_account: 'HSS-CGLB-CUST-01', quantity: 200000, market_value: 198400, currency: 'USD', accrued_income: 3120, corp_action_status: 'ACTION_REQUIRED', corp_action_detail: 'Optional Tender Offer — Election Cutoff 10 Dec 2026' },
+      { id: 'sec-3', isin: 'IE00B44Z5B48', security_name: 'HSBC Global Sterling Liquidity Fund (Class A)', asset_class: 'MONEY_MARKET_FUND', custodian_account: 'HSS-CGLB-CUST-02', quantity: 85000, market_value: 85412.50, currency: 'GBP', accrued_income: 412.50, corp_action_status: 'NONE', corp_action_detail: 'Daily accumulating share class' },
+    ],
+    afdSchedules: [
+      { id: 'afd-1', report_type: 'End-of-Day Multi-Currency Statement', format: 'MT940', frequency: 'DAILY', delivery_channel: 'ERP_SFTP', recipient: 'erp-treasury@coralgenz.com', status: 'ACTIVE', last_run_at: now },
+      { id: 'afd-2', report_type: 'Global Cash Position Summary', format: 'BAI2', frequency: 'WEEKLY', delivery_channel: 'SFTP_PORTAL', recipient: 'karthick.krishna@coralgenz.com', status: 'ACTIVE', last_run_at: now },
     ],
     facilities: [
-      { id: 'rf-1', organisation_id: 'org-meridian-gb', account_name: 'UK Invoice Discounting Facility', facility_number: 'RF-UK-9012', scenario: 'Confidential Invoice Discounting', currency: 'GBP', total_limit: 500000, utilised_amount: 185000, available_limit: 315000, advance_rate_pct: 90, status: 'ACTIVE' },
-      { id: 'rf-2', organisation_id: 'org-meridian-gb', account_name: 'Euro Export Factoring Line', facility_number: 'RF-EU-4418', scenario: 'Open Account Export Factoring', currency: 'EUR', total_limit: 350000, utilised_amount: 92000, available_limit: 258000, advance_rate_pct: 85, status: 'ACTIVE' },
+      { id: 'rf-1', organisation_id: 'org-meridian-in', account_name: 'India Invoice Discounting Facility', facility_number: 'RF-IN-9012', scenario: 'Confidential Invoice Discounting', currency: 'INR', total_limit: 5000000, utilised_amount: 1850000, available_limit: 3150000, advance_rate_pct: 90, status: 'ACTIVE' },
+      { id: 'rf-2', organisation_id: 'org-meridian-in', account_name: 'Euro Export Factoring Line', facility_number: 'RF-EU-4418', scenario: 'Open Account Export Factoring', currency: 'EUR', total_limit: 350000, utilised_amount: 92000, available_limit: 258000, advance_rate_pct: 85, status: 'ACTIVE' },
     ],
     receivablesDraws: [],
     receivablesLimits: [],
     receivablesMessages: [
-      { id: 'rfm-1', facility_id: 'rf-1', organisation_id: 'org-meridian-gb', subject: 'Q4 Ledger Audit Reconciliation Complete', body: 'Monthly sales ledger verification completed. Eligible receivables availability has been updated to GBP 315,000.00.', sender_name: 'Receivables Operations Desk', status: 'UNREAD', created_at: now, attachments: [{ name: 'Sales_Ledger_Summary_Nov2026.pdf', size: '312 KB' }] },
+      { id: 'rfm-1', facility_id: 'rf-1', organisation_id: 'org-meridian-in', subject: 'Q4 Ledger Audit Reconciliation Complete', body: 'Monthly sales ledger verification completed for Coralgenz Global India Pvt Ltd. Eligible receivables availability updated.', sender_name: 'Receivables Operations Desk', status: 'UNREAD', created_at: now, attachments: [{ name: 'Sales_Ledger_Summary_Nov2026.pdf', size: '312 KB' }] },
     ],
     notifications: [
       { id: 'n-1', title: 'Payment Awaiting Authorisation', message: 'Priority wire PAY-2026-44102 (EUR 14,500.00) awaits sign-off.', type: 'PAYMENT', is_read: 0, created_at: now },
@@ -234,10 +246,10 @@ function saveState(s: SandboxState) {
 }
 
 const USERS: Record<string, { fullName: string; role: string; password: string; orgId: string }> = {
-  premier_user: { fullName: 'Alexander Vance', role: 'ORG_ADMIN', password: 'Password@123', orgId: 'org-meridian-gb' },
-  corp_initiator: { fullName: 'Claire Beaumont', role: 'PAYMENT_INITIATOR', password: 'CorpPass@2026', orgId: 'org-meridian-gb' },
-  corp_authoriser: { fullName: 'Rajiv Malhotra', role: 'AUTHORISER', password: 'CorpPass@2026', orgId: 'org-meridian-gb' },
-  corp_viewer: { fullName: 'Hannah Lindqvist', role: 'FINANCE_VIEWER', password: 'CorpPass@2026', orgId: 'org-meridian-gb' },
+  premier_user: { fullName: 'Karthick Krishna M S', role: 'ORG_ADMIN', password: 'Password@123', orgId: 'org-meridian-in' },
+  corp_initiator: { fullName: 'Claire Beaumont', role: 'PAYMENT_INITIATOR', password: 'CorpPass@2026', orgId: 'org-meridian-in' },
+  corp_authoriser: { fullName: 'Rajiv Malhotra', role: 'AUTHORISER', password: 'CorpPass@2026', orgId: 'org-meridian-in' },
+  corp_viewer: { fullName: 'Hannah Lindqvist', role: 'FINANCE_VIEWER', password: 'CorpPass@2026', orgId: 'org-meridian-in' },
 };
 
 function currentProfile() {
@@ -250,7 +262,7 @@ function currentProfile() {
     username: uname,
     customer_id: 'GB4490182',
     full_name: u.fullName,
-    email: `${uname}@meridiannet.com`,
+    email: uname === 'premier_user' ? 'karthick.krishna@coralgenz.com' : `${uname}@coralgenz.com`,
     phone: '+44 7700 900821',
     role: u.role,
     organisationId: org.id,
@@ -286,8 +298,8 @@ export async function handleSandboxRequest(pathWithQuery: string, options: Reque
       profile: {
         username: id,
         fullName: u.fullName,
-        organisationName: 'Meridian Global Manufacturing Ltd',
-        country: 'GB',
+        organisationName: 'Coralgenz Global India Pvt Ltd',
+        country: 'IN',
         methods: { password: true, securityPin: true, mobileAuth: true, securityCode: true, passkey: false, passkeyCount: 0 },
       },
     };
@@ -335,7 +347,7 @@ export async function handleSandboxRequest(pathWithQuery: string, options: Reque
     const code = String(Math.floor(100000 + Math.random() * 899999));
     state.resetCodes[id] = code;
     saveState(state);
-    return { success: true, maskedEmail: `${id.slice(0, 2)}****@meridiannet.com`, sandboxResetCode: code, expiresInMinutes: 30 };
+    return { success: true, maskedEmail: `${id.slice(0, 2)}****@coralgenz.com`, sandboxResetCode: code, expiresInMinutes: 30 };
   }
 
   if (path === '/api/auth/pin/reset-confirm') {
@@ -505,7 +517,7 @@ export async function handleSandboxRequest(pathWithQuery: string, options: Reque
     const p = {
       id: `pay-${Date.now()}`,
       reference: `PAY-2026-${Math.floor(10000 + Math.random() * 89999)}`,
-      organisation_id: body.orgId || 'org-meridian-gb',
+      organisation_id: body.orgId || 'org-meridian-in',
       initiator_id: currentProfile().id,
       initiator_name: currentProfile().full_name,
       category: body.category || 'PRIORITY_PAYMENT',
@@ -572,8 +584,142 @@ export async function handleSandboxRequest(pathWithQuery: string, options: Reque
     return { success: true, status: t?.status };
   }
 
+  if (path === '/api/corporate/trade' && method === 'POST') {
+    const tr = {
+      id: `trd-${Date.now()}`,
+      reference: `TRD-2026-${Math.floor(10000 + Math.random() * 89999)}`,
+      organisation_id: body.orgId || 'org-meridian-in',
+      trade_category: body.tradeCategory || 'IMPORT_DC',
+      direction: body.direction || 'IMPORT',
+      counterparty: body.counterparty,
+      amount: Number(body.amount) || 0,
+      currency: body.currency || 'USD',
+      status: 'AWAITING_AUTHORISATION',
+      pending_action: body.billOfLading ? `${body.actionDescription || 'Authorise Trade Application'} (${body.billOfLading})` : (body.actionDescription || 'Authorise Trade Application'),
+      documents: [{ id: `d-${Date.now()}`, name: `${body.tradeCategory || 'TRADE'}_Application.pdf`, size: '380 KB' }],
+      timeline: [{ id: 't1', label: 'Application Submitted', description: 'Queued for trade authorisation', timestamp: new Date().toISOString(), state: 'CURRENT' }],
+    };
+    state.trade.unshift(tr);
+    saveState(state);
+    return { success: true, transaction: tr };
+  }
+
   if (path === '/api/corporate/trade') {
     return { success: true, transactions: state.trade };
+  }
+
+  if (path === '/api/corporate/templates' && method === 'POST') {
+    const tmpl = { id: `tmpl-${Date.now()}`, organisation_id: body.orgId || 'org-meridian-in', name: body.name, category: body.category || 'PRIORITY_PAYMENT', template_type: body.templateType || 'GENERAL', debit_account_id: body.debitAccountId || 'acc-gb-1', beneficiary_name: body.beneficiaryName, beneficiary_account: body.beneficiaryAccount, beneficiary_bank: body.beneficiaryBank, destination_country: body.destinationCountry || 'GB', swift_bic: body.swiftBic || '', currency: body.currency || 'GBP', default_amount: Number(body.defaultAmount) || 0, reference_note: body.referenceNote || '', status: 'ACTIVE' };
+    state.templates.unshift(tmpl);
+    saveState(state);
+    return { success: true, template: tmpl };
+  }
+
+  if (path.match(/^\/api\/corporate\/templates\/.+\/execute$/)) {
+    const id = path.split('/')[4];
+    const tmpl = state.templates.find((t) => t.id === id);
+    if (!tmpl) throw new Error('Template not found.');
+    const ref = `PAY-2026-${Math.floor(10000 + Math.random() * 89999)}`;
+    state.payments.unshift({
+      id: `pay-${Date.now()}`, reference: ref, organisation_id: tmpl.organisation_id, initiator_id: currentProfile().id, initiator_name: currentProfile().full_name,
+      category: tmpl.category, debit_account_id: tmpl.debit_account_id, debit_account_name: 'Corporate Account', debit_currency: tmpl.currency,
+      beneficiary_name: tmpl.beneficiary_name, beneficiary_account: tmpl.beneficiary_account, beneficiary_bank: tmpl.beneficiary_bank,
+      destination_country: tmpl.destination_country, amount: tmpl.template_type === 'RESTRICTED' ? tmpl.default_amount : Number(body.amount || tmpl.default_amount),
+      currency: tmpl.currency, reference_note: `[Template: ${tmpl.name}] ${tmpl.reference_note}`, status: 'AWAITING_AUTHORISATION', required_approvals: 1, current_approvals: 0,
+      timeline: [{ id: '1', stage: 'CREATED', label: 'Created from template', description: `Executed by ${currentProfile().full_name}`, timestamp: new Date().toISOString(), state: 'CURRENT' }],
+      created_at: new Date().toISOString(), updated_at: new Date().toISOString(),
+    });
+    saveState(state);
+    return { success: true, reference: ref };
+  }
+
+  if (path.match(/^\/api\/corporate\/templates\/.+$/) && method === 'DELETE') {
+    const id = path.split('/')[4];
+    state.templates = state.templates.filter((t) => t.id !== id);
+    saveState(state);
+    return { success: true };
+  }
+
+  if (path === '/api/corporate/templates') {
+    return { success: true, templates: state.templates };
+  }
+
+  if (path === '/api/corporate/virtual-accounts' && method === 'POST') {
+    const va = { id: `va-${Date.now()}`, organisation_id: body.orgId || 'org-meridian-in', parent_account_id: body.parentAccountId || 'acc-in-1', virtual_number: `VA-IN-${Math.floor(100000 + Math.random() * 899999)}`, account_name: body.accountName, region: body.region || 'India', business_line: body.businessLine || 'Commercial Treasury', currency: body.currency || 'INR', allocated_balance: 0, reconciled_count: 0, status: 'ACTIVE' };
+    state.virtualAccounts.unshift(va);
+    saveState(state);
+    return { success: true, virtualAccount: va };
+  }
+
+  if (path.match(/^\/api\/corporate\/virtual-accounts\/.+\/reconcile$/)) {
+    const id = path.split('/')[4];
+    const va = state.virtualAccounts.find((v) => v.id === id);
+    if (va) {
+      va.allocated_balance += Number(body.amount || 2500);
+      va.reconciled_count += 1;
+      saveState(state);
+    }
+    return { success: true };
+  }
+
+  if (path === '/api/corporate/virtual-accounts') {
+    return { success: true, virtualAccounts: state.virtualAccounts };
+  }
+
+  if (path === '/api/corporate/file-uploads' && method === 'POST') {
+    const rows = Array.isArray(body.rows) && body.rows.length > 0 ? body.rows : [{ beneficiary: 'Nordic Components GmbH', amount: 4200 }];
+    const totalAmount = rows.reduce((s: number, r: any) => s + (Number(r.amount) || 0), 0);
+    const up = { id: `up-${Date.now()}`, reference: `BATCH-2026-${Math.floor(1000 + Math.random() * 8999)}`, filename: body.filename || 'payment_batch.csv', format: body.format || 'CSV', total_count: rows.length, valid_count: rows.length, error_count: 0, total_amount: totalAmount, currency: body.currency || 'GBP', status: 'AWAITING_AUTHORISATION', validationSummary: [`Format verified: ${body.format || 'CSV'}`, `${rows.length} valid instructions staged`] };
+    state.fileUploads.unshift(up);
+    saveState(state);
+    return { success: true, upload: up };
+  }
+
+  if (path === '/api/corporate/file-uploads') {
+    return { success: true, uploads: state.fileUploads };
+  }
+
+  if (path.match(/^\/api\/corporate\/scf\/.+\/approve$/)) {
+    const id = path.split('/')[4];
+    const o = state.scfOffers.find((x) => x.id === id);
+    if (o) o.early_pay_status = 'APPROVED_EARLY_PAY';
+    saveState(state);
+    return { success: true };
+  }
+
+  if (path === '/api/corporate/scf') {
+    return { success: true, offers: state.scfOffers };
+  }
+
+  if (path.match(/^\/api\/corporate\/securities\/.+\/elect$/)) {
+    const id = path.split('/')[4];
+    const s = state.securities.find((x) => x.id === id);
+    if (s) {
+      s.corp_action_status = 'ELECTED';
+      s.corp_action_detail = `Election confirmed (${body.election || 'TENDER_ELECTED'})`;
+      saveState(state);
+    }
+    return { success: true };
+  }
+
+  if (path === '/api/corporate/securities') {
+    return { success: true, holdings: state.securities };
+  }
+
+  if (path === '/api/corporate/fx-deal') {
+    const rate = body.fromCurrency === body.toCurrency ? 1 : 1.2845;
+    return { success: true, deal: { reference: `FXD-2026-${Math.floor(10000 + Math.random() * 89999)}`, fromCurrency: body.fromCurrency, toCurrency: body.toCurrency, sellAmount: Number(body.amount), buyAmount: Number((Number(body.amount) * rate).toFixed(2)), rate, valueDate: body.settlementDate || new Date().toISOString().slice(0, 10), status: 'EXECUTED_SANDBOX' } };
+  }
+
+  if (path === '/api/corporate/reports/afd' && method === 'POST') {
+    const sch = { id: `afd-${Date.now()}`, report_type: body.reportType, format: body.format || 'MT940', frequency: body.frequency || 'DAILY', delivery_channel: body.deliveryChannel || 'SFTP_PORTAL', recipient: body.recipient || 'karthick.krishna@coralgenz.com', status: 'ACTIVE', last_run_at: new Date().toISOString() };
+    state.afdSchedules.unshift(sch);
+    saveState(state);
+    return { success: true, schedule: sch };
+  }
+
+  if (path === '/api/corporate/reports/afd') {
+    return { success: true, schedules: state.afdSchedules };
   }
 
   if (path === '/api/corporate/receivables/draw') {

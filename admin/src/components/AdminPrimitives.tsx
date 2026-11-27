@@ -1,15 +1,22 @@
 import React, { useEffect, useId, useRef } from 'react';
 import { AlertCircle, CheckCircle2, Clock, Loader2, X, XCircle } from 'lucide-react';
 
-export const AdminBrandMark: React.FC<{ size?: number }> = ({ size = 30 }) => (
-  <img
-    src="/logo.jpg"
-    alt="HSBCnet Admin logo"
+export const AdminBrandMark: React.FC<{ size?: number }> = ({ size = 34 }) => (
+  <svg
+    xmlns="http://www.w3.org/2000/svg"
+    viewBox="0 0 80 42"
     width={size}
-    height={size}
-    style={{ width: size, height: size }}
-    className="object-cover rounded-[2px] shrink-0 select-none"
-  />
+    height={Math.round(size * 0.54)}
+    aria-label="HSBCnet Admin logo"
+    className="shrink-0 select-none"
+  >
+    <polygon points="2,21 21,2 21,40" fill="#DB001B" />
+    <polygon points="78,21 59,2 59,40" fill="#DB001B" />
+    <polygon points="21,2 59,2 40,21" fill="#DB001B" />
+    <polygon points="21,40 59,40 40,21" fill="#DB001B" />
+    <polygon points="21,2 40,21 21,40" fill="#FFFFFF" />
+    <polygon points="59,2 40,21 59,40" fill="#FFFFFF" />
+  </svg>
 );
 
 export const AdminButton: React.FC<

@@ -588,6 +588,108 @@ export function initializeSchema() {
       created_at TEXT NOT NULL DEFAULT (datetime('now'))
     );
 
+    -- HSBCnet Payment Templates (General & Restricted)
+    CREATE TABLE IF NOT EXISTS payment_templates (
+      id TEXT PRIMARY KEY,
+      organisation_id TEXT NOT NULL,
+      name TEXT NOT NULL,
+      category TEXT NOT NULL DEFAULT 'PRIORITY_PAYMENT',
+      template_type TEXT NOT NULL DEFAULT 'GENERAL', -- GENERAL, RESTRICTED
+      debit_account_id TEXT NOT NULL,
+      beneficiary_name TEXT NOT NULL,
+      beneficiary_account TEXT NOT NULL,
+      beneficiary_bank TEXT NOT NULL,
+      destination_country TEXT NOT NULL DEFAULT 'GB',
+      swift_bic TEXT,
+      currency TEXT NOT NULL DEFAULT 'GBP',
+      default_amount REAL NOT NULL DEFAULT 0,
+      reference_note TEXT,
+      status TEXT NOT NULL DEFAULT 'ACTIVE',
+      created_by TEXT,
+      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+
+    -- Virtual Accounts (AR Reconciliation & Sub-Ledgers)
+    CREATE TABLE IF NOT EXISTS virtual_accounts (
+      id TEXT PRIMARY KEY,
+      organisation_id TEXT NOT NULL,
+      parent_account_id TEXT NOT NULL,
+      virtual_number TEXT UNIQUE NOT NULL,
+      account_name TEXT NOT NULL,
+      region TEXT NOT NULL,
+      business_line TEXT NOT NULL,
+      currency TEXT NOT NULL DEFAULT 'GBP',
+      allocated_balance REAL NOT NULL DEFAULT 0,
+      reconciled_count INTEGER NOT NULL DEFAULT 0,
+      status TEXT NOT NULL DEFAULT 'ACTIVE',
+      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+
+    -- Batch Payment File Uploads (ISO 20022 XML, CSV, BACS, ACH)
+    CREATE TABLE IF NOT EXISTS batch_uploads (
+      id TEXT PRIMARY KEY,
+      reference TEXT UNIQUE NOT NULL,
+      organisation_id TEXT NOT NULL,
+      filename TEXT NOT NULL,
+      format TEXT NOT NULL DEFAULT 'ISO20022_XML',
+      total_count INTEGER NOT NULL DEFAULT 0,
+      valid_count INTEGER NOT NULL DEFAULT 0,
+      error_count INTEGER NOT NULL DEFAULT 0,
+      total_amount REAL NOT NULL DEFAULT 0,
+      currency TEXT NOT NULL DEFAULT 'GBP',
+      status TEXT NOT NULL DEFAULT 'AWAITING_AUTHORISATION',
+      validation_summary_json TEXT NOT NULL DEFAULT '[]',
+      uploaded_by TEXT,
+      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+
+    -- Supply Chain Finance (Payables / Supplier Early Discounting)
+    CREATE TABLE IF NOT EXISTS supply_chain_finance (
+      id TEXT PRIMARY KEY,
+      reference TEXT UNIQUE NOT NULL,
+      organisation_id TEXT NOT NULL,
+      supplier_name TEXT NOT NULL,
+      invoice_number TEXT NOT NULL,
+      invoice_amount REAL NOT NULL,
+      currency TEXT NOT NULL DEFAULT 'USD',
+      maturity_date TEXT NOT NULL,
+      discount_rate_pct REAL NOT NULL DEFAULT 3.25,
+      net_settlement REAL NOT NULL,
+      early_pay_status TEXT NOT NULL DEFAULT 'OFFER_AVAILABLE', -- OFFER_AVAILABLE, APPROVED_EARLY_PAY, SETTLED
+      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+
+    -- HSBC Securities Services (Custody, Portfolio & Corporate Actions)
+    CREATE TABLE IF NOT EXISTS securities_holdings (
+      id TEXT PRIMARY KEY,
+      organisation_id TEXT NOT NULL,
+      isin TEXT NOT NULL,
+      security_name TEXT NOT NULL,
+      asset_class TEXT NOT NULL,
+      custodian_account TEXT NOT NULL,
+      quantity REAL NOT NULL,
+      market_value REAL NOT NULL,
+      currency TEXT NOT NULL DEFAULT 'USD',
+      accrued_income REAL NOT NULL DEFAULT 0,
+      corp_action_status TEXT DEFAULT 'NONE', -- NONE, ACTION_REQUIRED, ELECTED
+      corp_action_detail TEXT,
+      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+
+    -- Automated File Delivery (AFD) & Reports Schedules
+    CREATE TABLE IF NOT EXISTS afd_schedules (
+      id TEXT PRIMARY KEY,
+      organisation_id TEXT NOT NULL,
+      report_type TEXT NOT NULL,
+      format TEXT NOT NULL DEFAULT 'MT940',
+      frequency TEXT NOT NULL DEFAULT 'DAILY',
+      delivery_channel TEXT NOT NULL DEFAULT 'SFTP_PORTAL',
+      recipient TEXT NOT NULL,
+      status TEXT NOT NULL DEFAULT 'ACTIVE',
+      last_run_at TEXT NOT NULL DEFAULT (datetime('now')),
+      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+
     -- Indexes for performance
     CREATE INDEX IF NOT EXISTS idx_accounts_user ON accounts(user_id);
     CREATE INDEX IF NOT EXISTS idx_transactions_user ON transactions(user_id);

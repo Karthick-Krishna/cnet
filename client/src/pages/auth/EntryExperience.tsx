@@ -36,6 +36,8 @@ import { BANK_CONFIG } from '@shared/constants';
 
 type AuthStep =
   | 'WELCOME'
+  | 'INFO_MENU'
+  | 'INFO_DETAIL'
   | 'SELECT_METHOD'
   | 'PASSWORD'
   | 'PIN'
@@ -141,6 +143,15 @@ export const EntryExperience: React.FC = () => {
 
   const [helpOpen, setHelpOpen] = useState(false);
   const [securityInfoOpen, setSecurityInfoOpen] = useState(false);
+  const [selectedInfoId, setSelectedInfoId] = useState<string | null>(null);
+  const [preferredLang, setPreferredLang] = useState(() => sessionStorage.getItem('hsbc_lang_pref') || 'English (Global)');
+  const [healthPingResult, setHealthPingResult] = useState<string | null>(null);
+  const [secChecks, setSecChecks] = useState<Record<string, boolean>>({
+    bec: true,
+    pin: true,
+    dual: true,
+    domain: true,
+  });
 
   const [unlockPin, setUnlockPin] = useState('');
   const [unlockError, setUnlockError] = useState('');
@@ -203,20 +214,33 @@ export const EntryExperience: React.FC = () => {
     }
   };
 
-  // 1. Application Launch Screen
+  // 1. Application Launch Screen — Exact match to uploaded Splash Screen image
   if (phase === 'LAUNCHING') {
     return (
-      <main className="min-h-dvh bg-[#202A30] flex flex-col items-center justify-center p-6">
+      <main className="relative min-h-dvh bg-[#0F151B] flex flex-col items-center justify-center p-6 overflow-hidden">
+        <img
+          src="/welcome-bg.jpg"
+          alt=""
+          aria-hidden="true"
+          className="absolute inset-0 w-full h-full object-cover"
+        />
+        <div
+          aria-hidden="true"
+          className="absolute inset-0 bg-gradient-to-b from-[#0A0F14]/25 via-[#0A0F14]/15 to-[#0A0F14]/45"
+        />
         <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ duration: 0.35 }}
-          className="flex flex-col items-center text-center"
+          initial={{ opacity: 0, scale: 0.98 }}
+          animate={{ opacity: 1, scale: 1 }}
+          transition={{ duration: 0.45 }}
+          className="relative z-10 flex items-center justify-center gap-3.5"
         >
-          <BrandMark size={112} className="rounded-[4px]" />
-          <div className="mt-6 w-28 h-0.5 bg-white/15 overflow-hidden">
-            <div className="h-full w-1/2 bg-[#DB001B] animate-pulse" />
-          </div>
+          <span
+            className="text-[36px] sm:text-[44px] font-normal tracking-wide text-white leading-none drop-shadow-[0_2px_10px_rgba(0,0,0,0.65)]"
+            style={{ fontFamily: 'Georgia, "Times New Roman", serif' }}
+          >
+            HSBC
+          </span>
+          <BrandMark size={72} />
         </motion.div>
       </main>
     );
@@ -617,17 +641,20 @@ export const EntryExperience: React.FC = () => {
           className="absolute inset-0 bg-gradient-to-b from-[#202A30]/85 via-[#263640]/55 to-[#202A30]/92"
         />
 
-        {/* Top Identity Header Bar */}
+        {/* Top Identity Header Bar — Logo ONLY without name on Welcome username screen */}
         <header className="relative z-10 w-full">
-          <div className="max-w-md mx-auto px-4 pt-3 pb-1 flex items-center justify-between">
+          <div className="max-w-md mx-auto px-4 pt-4 pb-1 flex items-center justify-between">
             <div className="w-10" aria-hidden="true" />
             <div className="flex items-center justify-center">
-              <BrandMark size={52} className="rounded-[4px]" />
+              <BrandMark size={52} />
             </div>
             <button
               type="button"
-              onClick={() => setSecurityInfoOpen(true)}
-              aria-label="Security information"
+              onClick={() => {
+                setSelectedInfoId(null);
+                setStep('INFO_MENU');
+              }}
+              aria-label="Legal and security information"
               className="min-w-[40px] min-h-[40px] flex items-center justify-center text-white/90 hover:text-white"
             >
               <Info className="w-5 h-5" strokeWidth={1.75} aria-hidden="true" />
@@ -798,6 +825,211 @@ export const EntryExperience: React.FC = () => {
             <p>{BANK_CONFIG.disclaimer}</p>
           </div>
         </NativeDialog>
+      </main>
+    );
+  }
+
+  // =========================================================================
+  // INFORMATION SCREEN & WORKING SUB-PAGES — Exact match to uploaded Image 2
+  // =========================================================================
+  const INFO_ROWS = [
+    { id: 'TERMS', title: 'Terms and Conditions of Use' },
+    { id: 'PRIVACY', title: 'Privacy and Data Protection Statement' },
+    { id: 'LANG', title: 'HSBCnet condition of national language use' },
+    { id: 'IMPORTANT', title: 'Important Information' },
+    { id: 'SECURITY_TIPS', title: 'Security Tips' },
+    { id: 'EULA', title: 'End User Licence Agreement' },
+    { id: 'ACKNOWLEDGEMENT', title: 'Acknowledgement' },
+  ];
+
+  if (step === 'INFO_MENU') {
+    return (
+      <main className="min-h-dvh bg-[#F4F5F6] flex flex-col items-center justify-center sm:p-6">
+        <div className="w-full max-w-md bg-white sm:border sm:border-[#D9DEE1] min-h-dvh sm:min-h-[680px] flex flex-col justify-between">
+          <div>
+            {/* Top Bar: Back to Username Welcome + Centered Red/White Hexagon Logo ONLY */}
+            <header className="px-4 pt-4 pb-3 flex items-center justify-between">
+              <button
+                type="button"
+                onClick={() => setStep('WELCOME')}
+                aria-label="Back to welcome screen"
+                className="min-w-[36px] min-h-[36px] flex items-center justify-start text-[#252B30] hover:text-[#DB001B]"
+              >
+                <ArrowLeft className="w-5 h-5" />
+              </button>
+              <BrandMark size={54} />
+              <div className="w-9" aria-hidden="true" />
+            </header>
+
+            <nav aria-label="HSBCnet legal and security information" className="mt-2">
+              <ul className="divide-y divide-transparent">
+                {INFO_ROWS.map((row) => (
+                  <li key={row.id}>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSelectedInfoId(row.id);
+                        setHealthPingResult(null);
+                        setStep('INFO_DETAIL');
+                      }}
+                      className="w-full px-5 py-4 flex items-center justify-between gap-4 text-left hover:bg-[#F4F5F6] transition-colors"
+                    >
+                      <span className="text-[16px] font-normal text-[#1E2328] leading-snug">{row.title}</span>
+                      <ChevronRight className="w-5 h-5 text-[#DB001B] shrink-0" strokeWidth={2.25} aria-hidden="true" />
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </nav>
+          </div>
+
+          <footer className="px-6 py-6 text-center text-xs text-[#252B30] leading-relaxed">
+            <div>&copy; HSBC Bank plc 2026. All rights reserved.</div>
+            <div>App Version 3.26.11.0</div>
+          </footer>
+        </div>
+      </main>
+    );
+  }
+
+  if (step === 'INFO_DETAIL' && selectedInfoId) {
+    const activeInfo = INFO_ROWS.find((r) => r.id === selectedInfoId) || INFO_ROWS[0];
+    return (
+      <main className="min-h-dvh bg-[#F4F5F6] flex flex-col items-center justify-center sm:p-6">
+        <div className="w-full max-w-md bg-white sm:border sm:border-[#D9DEE1] min-h-dvh sm:min-h-[680px] flex flex-col justify-between">
+          <div>
+            <BankingHeader title={activeInfo.title} onBack={() => setStep('INFO_MENU')} />
+            <div className="p-5 space-y-4 text-xs text-[#252B30] leading-relaxed">
+              {selectedInfoId === 'TERMS' && (
+                <>
+                  <div className="p-3 bg-[#F4F5F6] border border-[#D9DEE1] font-medium">
+                    Master Electronic Banking Terms — Coralgenz Global India Pvt Ltd
+                  </div>
+                  <p>1. Access to HSBCnet services is granted exclusively to authorised corporate users appointed by Coralgenz Global India Pvt Ltd System Administrators.</p>
+                  <p>2. Dual-control payment mandates require independent Maker initiation and Authoriser verification via 6-digit Mobile Security PIN, Hardware Token, or Platform Passkey.</p>
+                  <p>3. Trade Finance instruments (Documentary Credits, SBLCs, Supply Chain Finance) remain subject to UCP 600 and applicable RBI / FEMA corporate guidelines.</p>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => {
+                      const blob = new Blob([
+                        'HSBCnet Terms and Conditions of Use (2026)\nEntity: Coralgenz Global India Pvt Ltd\nVersion: App Version 3.26.11.0\n\nAll corporate instructions are governed by organisation-scoped entitlements and maker-checker authorisation controls.',
+                      ], { type: 'text/plain' });
+                      const url = URL.createObjectURL(blob);
+                      const a = document.createElement('a');
+                      a.href = url;
+                      a.download = 'HSBCnet_Terms_Coralgenz_Global_India.txt';
+                      a.click();
+                      URL.revokeObjectURL(url);
+                    }}
+                  >
+                    Download Terms Summary (.txt)
+                  </Button>
+                </>
+              )}
+
+              {selectedInfoId === 'PRIVACY' && (
+                <>
+                  <p><strong>Privacy and Data Protection Statement:</strong> Corporate banking credentials, biometric WebAuthn public keys, and audit trails for Coralgenz Global India Pvt Ltd are processed in strict accordance with India Digital Personal Data Protection (DPDP) Act and UK/EU GDPR principles.</p>
+                  <p>Authentication secrets (PINs and passkeys) never leave secure server verification endpoints in plaintext and are never stored in browser localStorage.</p>
+                </>
+              )}
+
+              {selectedInfoId === 'LANG' && (
+                <div className="space-y-3">
+                  <p>Select your preferred portal interface language under HSBCnet national language conditions:</p>
+                  <div className="divide-y divide-[#D9DEE1] border border-[#D9DEE1]">
+                    {['English (Global)', 'English (India)', 'हिन्दी (Hindi)', 'Français', 'Deutsch'].map((lang) => (
+                      <label key={lang} className="p-3 flex items-center justify-between cursor-pointer hover:bg-[#F4F5F6]">
+                        <span>{lang}</span>
+                        <input
+                          type="radio"
+                          name="hsbc-info-lang"
+                          checked={preferredLang === lang}
+                          onChange={() => {
+                            setPreferredLang(lang);
+                            sessionStorage.setItem('hsbc_lang_pref', lang);
+                          }}
+                          className="accent-[#DB001B]"
+                        />
+                      </label>
+                    ))}
+                  </div>
+                  <div className="p-2.5 bg-[#ECF6F1] border border-[#B7DFCC] text-[#27835B]">
+                    Active language preference: <strong>{preferredLang}</strong>
+                  </div>
+                </div>
+              )}
+
+              {selectedInfoId === 'IMPORTANT' && (
+                <div className="space-y-3">
+                  <div className="p-3 bg-[#F4F5F6] border border-[#D9DEE1]">
+                    <div><strong>Entity:</strong> Coralgenz Global India Pvt Ltd</div>
+                    <div><strong>Primary Clearing Desk:</strong> Chennai Anna Salai Corporate Hub (IFSC CGLB0641002)</div>
+                    <div><strong>Cut-off Windows:</strong> RTGS/NEFT 18:00 IST • SEPA EUR 15:30 GMT</div>
+                  </div>
+                  <Button
+                    size="sm"
+                    onClick={async () => {
+                      try {
+                        const r = await apiRequest<any>('/api/health', { skipAuthHandling: true });
+                        setHealthPingResult(`Gateway ${r.status || 'ONLINE'} • Mode: ${r.mode || 'LIVE_API'}`);
+                      } catch {
+                        setHealthPingResult('Gateway check failed.');
+                      }
+                    }}
+                  >
+                    Run Live Gateway Connectivity Check
+                  </Button>
+                  {healthPingResult && (
+                    <div className="p-2.5 bg-[#ECF6F1] border border-[#B7DFCC] text-[#27835B] font-medium">{healthPingResult}</div>
+                  )}
+                </div>
+              )}
+
+              {selectedInfoId === 'SECURITY_TIPS' && (
+                <div className="space-y-3">
+                  <p>Interactive corporate cyber-hygiene checklist for Coralgenz Global India Pvt Ltd:</p>
+                  <div className="divide-y divide-[#D9DEE1] border border-[#D9DEE1]">
+                    {[
+                      { k: 'bec', label: 'Verify beneficiary IBAN/IFSC changes verbally before authorising wires' },
+                      { k: 'pin', label: 'Never share your 6-digit Mobile Security PIN or 8-digit generated code' },
+                      { k: 'dual', label: 'Enforce Maker-Checker dual authorisation for wires above INR 500,000' },
+                      { k: 'domain', label: 'Always inspect transaction amounts on the Push / Step-Up screen' },
+                    ].map((tip) => (
+                      <label key={tip.k} className="p-3 flex items-start gap-2.5 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={!!secChecks[tip.k]}
+                          onChange={(e) => setSecChecks((p) => ({ ...p, [tip.k]: e.target.checked }))}
+                          className="mt-0.5 accent-[#DB001B]"
+                        />
+                        <span>{tip.label}</span>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {selectedInfoId === 'EULA' && (
+                <div className="space-y-2.5">
+                  <p><strong>End User Licence Agreement (App Version 3.26.11.0):</strong> Licensed solely for authorised corporate treasury operations on behalf of Coralgenz Global India Pvt Ltd. Reverse engineering, credential scraping, or automated bypassing of security controls is prohibited.</p>
+                </div>
+              )}
+
+              {selectedInfoId === 'ACKNOWLEDGEMENT' && (
+                <div className="space-y-2.5">
+                  <p>HSBCnet Web &amp; Mobile client components utilise standards-compliant FIDO2 / WebAuthn cryptographic verification, ISO 20022 payment schema validation, SWIFT MT940 / BAI2 reporting engines, and Lucide vector iconography.</p>
+                </div>
+              )}
+            </div>
+          </div>
+          <div className="p-4 border-t border-[#D9DEE1]">
+            <Button variant="outline" fullWidth onClick={() => setStep('INFO_MENU')}>
+              Back to Information Menu
+            </Button>
+          </div>
+        </div>
       </main>
     );
   }

@@ -25,10 +25,10 @@ function buildUserSessionPayload(user: any) {
     email: user.email,
     phone: user.phone,
     role: user.role,
-    organisationId: org?.id || 'org-meridian-gb',
-    organisationName: org?.name || 'Meridian Global Manufacturing Ltd',
-    country: org?.country || 'GB',
-    baseCurrency: org?.base_currency || 'GBP',
+    organisationId: org?.id || 'org-meridian-in',
+    organisationName: org?.name || 'Coralgenz Global India Pvt Ltd',
+    country: org?.country || 'IN',
+    baseCurrency: org?.base_currency || 'INR',
     permissions,
     biometric_enabled: !!user.biometric_enabled,
     hasPinConfigured: !!user.security_pin_hash,
@@ -112,8 +112,8 @@ corporateAuthRouter.post('/lookup', (req: Request, res: Response): void => {
     profile: {
       username: user.username,
       fullName: user.full_name,
-      organisationName: org?.name || 'Meridian Global Manufacturing Ltd',
-      country: org?.country || 'GB',
+      organisationName: org?.name || 'Coralgenz Global India Pvt Ltd',
+      country: org?.country || 'IN',
       methods: {
         password: true,
         securityPin: !!user.security_pin_hash,
@@ -490,7 +490,7 @@ corporateAuthRouter.post('/webauthn/register/options', authenticateToken, (req: 
 
   res.json({
     challenge,
-    rp: { id: rpId, name: 'MeridianNet Corporate Banking' },
+    rp: { id: rpId, name: 'HSBCnet Corporate Banking — Coralgenz Global' },
     user: {
       id: Buffer.from(user.id).toString('base64url'),
       name: user.username,

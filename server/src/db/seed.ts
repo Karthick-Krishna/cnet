@@ -38,6 +38,8 @@ export function seedDatabase() {
   if (orgCount.count === 0) {
     seedCorporateData();
   }
+
+  syncCoralgenzAndNewModules();
 }
 
 function seedCoreLegacyData() {
@@ -54,10 +56,10 @@ function seedCoreLegacyData() {
     `).run(
       premierUserId,
       'premier_user',
-      'alexander.vance@meridiannet.com',
+      'karthick.krishna@coralgenz.com',
       '+44 7700 900821',
       passwordHash,
-      'Alexander Vance',
+      'Karthick Krishna M S',
       'USER',
       pinHash,
       secPinHash,
@@ -79,11 +81,11 @@ function seedCoreLegacyData() {
     );
 
     const adminRoles = [
-      { username: 'super_admin', email: 'admin@meridiannet.com', phone: '+44 20 7946 0901', name: 'Victoria Sterling', role: 'SUPER_ADMIN' },
-      { username: 'ops_officer', email: 'ops@meridiannet.com', phone: '+44 20 7946 0902', name: 'Marcus Chen', role: 'OPERATIONS' },
-      { username: 'support_rep', email: 'support@meridiannet.com', phone: '+44 20 7946 0903', name: 'Elena Rostova', role: 'SUPPORT' },
-      { username: 'compliance_officer', email: 'compliance@meridiannet.com', phone: '+44 20 7946 0904', name: 'Arthur Pendelton', role: 'COMPLIANCE' },
-      { username: 'bank_auditor', email: 'auditor@meridiannet.com', phone: '+44 20 7946 0905', name: 'Sarah Jenkins', role: 'AUDITOR' }
+      { username: 'super_admin', email: 'admin@coralgenz.com', phone: '+44 20 7946 0901', name: 'Victoria Sterling', role: 'SUPER_ADMIN' },
+      { username: 'ops_officer', email: 'ops@coralgenz.com', phone: '+44 20 7946 0902', name: 'Marcus Chen', role: 'OPERATIONS' },
+      { username: 'support_rep', email: 'support@coralgenz.com', phone: '+44 20 7946 0903', name: 'Elena Rostova', role: 'SUPPORT' },
+      { username: 'compliance_officer', email: 'compliance@coralgenz.com', phone: '+44 20 7946 0904', name: 'Arthur Pendelton', role: 'COMPLIANCE' },
+      { username: 'bank_auditor', email: 'auditor@coralgenz.com', phone: '+44 20 7946 0905', name: 'Sarah Jenkins', role: 'AUDITOR' }
     ];
 
     for (const admin of adminRoles) {
@@ -111,7 +113,7 @@ function seedCoreLegacyData() {
 
     const insertAccount = db.prepare(`
       INSERT INTO accounts (id, user_id, account_number, account_name, account_type, currency, available_balance, ledger_balance, status, branch_name, ifsc_swift, sort_code, country, is_favourite, favourite_order)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'ACTIVE', 'Canary Wharf Corporate Hub', 'MRDNGB2LXXX', ?, 'GB', ?, ?)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'ACTIVE', 'Canary Wharf Corporate Hub', 'CGLBGB2LXXX', ?, 'GB', ?, ?)
     `);
 
     for (const acc of accounts) {
@@ -119,12 +121,12 @@ function seedCoreLegacyData() {
     }
 
     const transactionsData = [
-      { ref: 'TXN-2026-90812', accountId: accSalaryId, party: 'Meridian Payroll Batch #11', amount: 8500.00, currency: 'GBP', desc: 'Monthly Corporate Payroll Settlement', cat: 'SALARY', type: 'DOMESTIC_TRANSFER', entryType: 'CREDIT', daysAgo: 1 },
+      { ref: 'TXN-2026-90812', accountId: accSalaryId, party: 'Coralgenz Global Payroll #11', amount: 8500.00, currency: 'GBP', desc: 'Monthly Corporate Payroll Settlement', cat: 'SALARY', type: 'DOMESTIC_TRANSFER', entryType: 'CREDIT', daysAgo: 1 },
       { ref: 'TXN-2026-89211', accountId: accSavingsId, party: 'EDF Energy Commercial', amount: 142.50, currency: 'GBP', desc: 'London Hub Facilities Utility', cat: 'UTILITIES', type: 'BILL_PAYMENT', entryType: 'DEBIT', daysAgo: 2 },
       { ref: 'TXN-2026-88402', accountId: accCurrentId, party: 'Apex Logistics Freight', amount: 285.00, currency: 'GBP', desc: 'Port Customs & Freight Charge', cat: 'SUPPLIER', type: 'DOMESTIC_TRANSFER', entryType: 'DEBIT', daysAgo: 3 },
       { ref: 'TXN-2026-87915', accountId: accSavingsId, party: 'Nordic Components GmbH', amount: 1200.00, currency: 'GBP', desc: 'Raw Material Vendor Settlement', cat: 'TRANSFER', type: 'DOMESTIC_TRANSFER', entryType: 'DEBIT', daysAgo: 5 },
       { ref: 'TXN-2026-86104', accountId: accFxId, party: 'AWS EMEA Cloud Billing', amount: 1199.00, currency: 'USD', desc: 'Enterprise Cloud Infrastructure', cat: 'SUPPLIER', type: 'INTL_TRANSFER', entryType: 'DEBIT', daysAgo: 7 },
-      { ref: 'TXN-2026-85420', accountId: accSavingsId, party: 'Meridian Treasury Yield', amount: 320.45, currency: 'GBP', desc: 'Overnight Sweep Interest Credit', cat: 'INVESTMENT', type: 'DEPOSIT_CREDIT', entryType: 'CREDIT', daysAgo: 10 },
+      { ref: 'TXN-2026-85420', accountId: accSavingsId, party: 'Coralgenz Treasury Yield', amount: 320.45, currency: 'GBP', desc: 'Overnight Sweep Interest Credit', cat: 'INVESTMENT', type: 'DEPOSIT_CREDIT', entryType: 'CREDIT', daysAgo: 10 },
       { ref: 'TXN-2026-84319', accountId: accCurrentId, party: 'Thames Water Commercial', amount: 68.20, currency: 'GBP', desc: 'Facility Water Direct Debit', cat: 'UTILITIES', type: 'BILL_PAYMENT', entryType: 'DEBIT', daysAgo: 12 },
       { ref: 'TXN-2026-83110', accountId: accSavingsId, party: 'CHAPS Clearing Fee', amount: 30.00, currency: 'GBP', desc: 'Priority Wire Settlement Levy', cat: 'CHARGES', type: 'DOMESTIC_TRANSFER', entryType: 'DEBIT', daysAgo: 15 }
     ];
@@ -150,7 +152,7 @@ function seedCoreLegacyData() {
       { name: 'Thames Logistics Partners Ltd', nickname: 'UK Freight', number: '200412-99014522', bank: 'Barclays Corporate UK', code: 'BARCGB22XXX', limit: 150000, fav: 1, country: 'GB', currency: 'GBP' },
       { name: 'Pacific Trade Holdings Inc', nickname: 'US Vendor', number: '021000021-88910422', bank: 'JPMorgan Chase NA', code: 'CHASUS33XXX', limit: 500000, fav: 0, country: 'US', currency: 'USD' },
       { name: 'Precision Castings India Pvt Ltd', nickname: 'Chennai Plant', number: '50200044128910', bank: 'HDFC Corporate Bank', code: 'HDFCINBBXXX', limit: 10000000, fav: 1, country: 'IN', currency: 'INR' },
-      { name: 'Meridian Singapore Pte Ltd', nickname: 'APAC Treasury', number: '7375-051-9910421', bank: 'DBS Bank Singapore', code: 'DBSSSGSGXXX', limit: 300000, fav: 0, country: 'SG', currency: 'SGD' }
+      { name: 'Coralgenz Global Singapore Pte Ltd', nickname: 'APAC Treasury', number: '7375-051-9910421', bank: 'DBS Bank Singapore', code: 'DBSSSGSGXXX', limit: 300000, fav: 0, country: 'SG', currency: 'SGD' }
     ];
 
     const insertBen = db.prepare(`
@@ -171,7 +173,7 @@ function seedCoreLegacyData() {
         online_enabled, international_enabled, contactless_enabled, daily_spending_limit, current_month_spent,
         credit_limit, available_credit, min_due, payment_due_date, reward_points
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 0, ?, 1, 1, 1, 10000.00, 2410.50, 30000.00, 27589.50, 150.00, '2026-12-15', 48920)
-    `).run(cardCreditId, premierUserId, accCurrentId, '•••• •••• •••• 9821', '9821', 'CREDIT', 'MASTERCARD', 'CORPORATE_WORLD_ELITE', 'ALEXANDER VANCE', '09', '29', '892', pinHash);
+    `).run(cardCreditId, premierUserId, accCurrentId, '•••• •••• •••• 9821', '9821', 'CREDIT', 'MASTERCARD', 'CORPORATE_WORLD_ELITE', 'KARTHICK KRISHNA M S', '09', '29', '892', pinHash);
 
     db.prepare(`
       INSERT INTO cards (
@@ -179,7 +181,7 @@ function seedCoreLegacyData() {
         cardholder_name, expiry_month, expiry_year, cvv_encrypted, is_frozen, is_blocked, pin_hash,
         online_enabled, international_enabled, contactless_enabled, daily_spending_limit, current_month_spent
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 0, ?, 1, 1, 1, 5000.00, 842.10)
-    `).run(cardDebitId, premierUserId, accSavingsId, '•••• •••• •••• 4108', '4108', 'DEBIT', 'VISA', 'CORPORATE_PLATINUM', 'ALEXANDER VANCE', '11', '28', '419', pinHash);
+    `).run(cardDebitId, premierUserId, accSavingsId, '•••• •••• •••• 4108', '4108', 'DEBIT', 'VISA', 'CORPORATE_PLATINUM', 'KARTHICK KRISHNA M S', '11', '28', '419', pinHash);
 
     db.prepare(`
       INSERT INTO deposits (id, user_id, account_id, deposit_type, deposit_number, principal_amount, interest_rate, tenure_months, expected_maturity_amount, maturity_date, status)
@@ -208,7 +210,7 @@ function seedCoreLegacyData() {
     const notifications = [
       { title: 'Payment Awaiting Authorisation', msg: 'Priority wire PAY-2026-44102 (EUR 42,500.00 to Nordic Components GmbH) requires 1 authorisation.', type: 'PAYMENT', read: 0 },
       { title: 'Trade Documentary Credit Issued', msg: 'Import DC TRD-2026-11092 (USD 185,000.00) updated to Issued status.', type: 'SYSTEM', read: 0 },
-      { title: 'Security Check: Registered Passkey', msg: 'Platform WebAuthn verification active for Alexander Vance.', type: 'SECURITY', read: 0 },
+      { title: 'Security Check: Registered Passkey', msg: 'Platform WebAuthn verification active for Karthick Krishna M S.', type: 'SECURITY', read: 0 },
       { title: 'Receivables Draw Settled', msg: 'Facility RF-UK-9012 draw of GBP 35,000.00 credited to operating treasury.', type: 'TRANSACTION', read: 1 }
     ];
     const insertNotif = db.prepare(`
@@ -270,17 +272,17 @@ function seedCorporateData() {
     db.prepare(`
       INSERT INTO organisations (id, name, registration_number, country, base_currency, status, is_sandbox, modules_json)
       VALUES (?, ?, ?, ?, ?, 'ACTIVE', 1, ?)
-    `).run(orgGbId, 'Meridian Global Manufacturing Ltd', 'UK-RC-09482110', 'GB', 'GBP', JSON.stringify(modulesGb));
+    `).run(orgGbId, 'Coralgenz Global UK Ltd', 'UK-RC-09482110', 'GB', 'GBP', JSON.stringify(modulesGb));
 
     db.prepare(`
       INSERT INTO organisations (id, name, registration_number, country, base_currency, status, is_sandbox, modules_json)
       VALUES (?, ?, ?, ?, ?, 'ACTIVE', 1, ?)
-    `).run(orgInId, 'Meridian Tech India Pvt Ltd', 'CIN-U72900TN2021PTC', 'IN', 'INR', JSON.stringify(modulesIn));
+    `).run(orgInId, 'Coralgenz Global India Pvt Ltd', 'CIN-U72900TN2021PTC', 'IN', 'INR', JSON.stringify(modulesIn));
 
     db.prepare(`
       INSERT INTO organisations (id, name, registration_number, country, base_currency, status, is_sandbox, modules_json)
       VALUES (?, ?, ?, ?, ?, 'ACTIVE', 1, ?)
-    `).run(orgUsId, 'Meridian Americas Logistics Inc', 'US-DE-8839201', 'US', 'USD', JSON.stringify(modulesUs));
+    `).run(orgUsId, 'Coralgenz Global US Inc', 'US-DE-8839201', 'US', 'USD', JSON.stringify(modulesUs));
 
     // Fetch premier_user & super_admin
     const premierUser = db.prepare(`SELECT id, full_name FROM users WHERE username = 'premier_user'`).get() as any;
@@ -295,9 +297,9 @@ function seedCorporateData() {
     const viewerId = uuidv4();
 
     const corpUsers = [
-      { id: initiatorId, username: 'corp_initiator', email: 'initiator@meridiannet.com', phone: '+44 7700 901101', name: 'Claire Beaumont', role: 'PAYMENT_INITIATOR', orgId: orgGbId, perms: INITIATOR_PERMS },
-      { id: authoriserId, username: 'corp_authoriser', email: 'authoriser@meridiannet.com', phone: '+44 7700 901102', name: 'Rajiv Malhotra', role: 'AUTHORISER', orgId: orgGbId, perms: AUTHORISER_PERMS },
-      { id: viewerId, username: 'corp_viewer', email: 'viewer@meridiannet.com', phone: '+44 7700 901103', name: 'Hannah Lindqvist', role: 'FINANCE_VIEWER', orgId: orgGbId, perms: VIEWER_PERMS },
+      { id: initiatorId, username: 'corp_initiator', email: 'initiator@coralgenz.com', phone: '+44 7700 901101', name: 'Claire Beaumont', role: 'PAYMENT_INITIATOR', orgId: orgGbId, perms: INITIATOR_PERMS },
+      { id: authoriserId, username: 'corp_authoriser', email: 'authoriser@coralgenz.com', phone: '+44 7700 901102', name: 'Rajiv Malhotra', role: 'AUTHORISER', orgId: orgGbId, perms: AUTHORISER_PERMS },
+      { id: viewerId, username: 'corp_viewer', email: 'viewer@coralgenz.com', phone: '+44 7700 901103', name: 'Hannah Lindqvist', role: 'FINANCE_VIEWER', orgId: orgGbId, perms: VIEWER_PERMS },
     ];
 
     for (const u of corpUsers) {
@@ -335,17 +337,17 @@ function seedCorporateData() {
 
       db.prepare(`
         INSERT INTO accounts (id, user_id, organisation_id, account_number, account_name, nickname, account_type, currency, available_balance, ledger_balance, status, branch_name, ifsc_swift, sort_code, iban, country, is_favourite, favourite_order)
-        VALUES (?, ?, ?, 'DE89-3704-0044-0532', 'Euro SEPA Treasury Pool', 'EUR Concentration', 'TREASURY', 'EUR', 142850.40, 148200.40, 'ACTIVE', 'Frankfurt Corporate Hub', 'MRDNDEFFXXX', '37040044', 'DE89370400440532013000', 'DE', 1, 4)
+        VALUES (?, ?, ?, 'DE89-3704-0044-0532', 'Euro SEPA Treasury Pool', 'EUR Concentration', 'TREASURY', 'EUR', 142850.40, 148200.40, 'ACTIVE', 'Frankfurt Corporate Hub', 'CGLBDEFFXXX', '37040044', 'DE89370400440532013000', 'DE', 1, 4)
       `).run(accEurId, premierUser.id, orgGbId);
 
       db.prepare(`
         INSERT INTO accounts (id, user_id, organisation_id, account_number, account_name, nickname, account_type, currency, available_balance, ledger_balance, status, branch_name, ifsc_swift, sort_code, country, is_favourite, favourite_order)
-        VALUES (?, ?, ?, '0641-0088-2941-01', 'India Corporate Current', 'Chennai Ops INR', 'OPERATING', 'INR', 14850200.00, 15120000.00, 'ACTIVE', 'Chennai Anna Salai Corporate', 'MRDN0641002', '64-10-02', 'IN', 1, 1)
+        VALUES (?, ?, ?, '0641-0088-2941-01', 'India Corporate Current', 'Chennai Ops INR', 'OPERATING', 'INR', 14850200.00, 15120000.00, 'ACTIVE', 'Chennai Anna Salai Corporate', 'CGLB0641002', '64-10-02', 'IN', 1, 1)
       `).run(accInrId, premierUser.id, orgInId);
 
       db.prepare(`
         INSERT INTO accounts (id, user_id, organisation_id, account_number, account_name, nickname, account_type, currency, available_balance, ledger_balance, status, branch_name, ifsc_swift, sort_code, country, is_favourite, favourite_order)
-        VALUES (?, ?, ?, '0210-0002-1988-44', 'US Dollar Clearing Account', 'NY Fedwire Ops', 'OPERATING', 'USD', 265400.00, 265400.00, 'ACTIVE', 'New York Midtown Hub', 'MRDNUS33XXX', '021000021', 'US', 1, 1)
+        VALUES (?, ?, ?, '0210-0002-1988-44', 'US Dollar Clearing Account', 'NY Fedwire Ops', 'OPERATING', 'USD', 265400.00, 265400.00, 'ACTIVE', 'New York Midtown Hub', 'CGLBUS33XXX', '021000021', 'US', 1, 1)
       `).run(accUsId, premierUser.id, orgUsId);
 
       // Also link corp_initiator, corp_authoriser, corp_viewer to orgGbId
@@ -697,6 +699,186 @@ function seedCorporateData() {
     if (superAdmin) {
       db.prepare(`UPDATE users SET organisation_id = ?, permissions_json = ? WHERE id = ?`)
         .run(orgGbId, JSON.stringify(ALL_PERMS), superAdmin.id);
+    }
+  });
+}
+
+function syncCoralgenzAndNewModules() {
+  runTransaction(() => {
+    const targetOrgId = 'org-meridian-in';
+    // 1. Migrate all records cleanly to Karthick Krishna M S & Coralgenz Global India Pvt Ltd (ONLY company)
+    db.prepare(`UPDATE users SET full_name = 'Karthick Krishna M S', email = 'karthick.krishna@coralgenz.com' WHERE username = 'premier_user' AND full_name != 'Karthick Krishna M S'`).run();
+    db.prepare(`UPDATE users SET email = replace(email, '@meridiannet.com', '@coralgenz.com') WHERE email LIKE '%@meridiannet.com'`).run();
+    db.prepare(`UPDATE organisations SET name = 'Coralgenz Global India Pvt Ltd' WHERE id = ?`).run(targetOrgId);
+    db.prepare(`UPDATE accounts SET organisation_id = ?, ifsc_swift = replace(ifsc_swift, 'MRDN', 'CGLB')`).run(targetOrgId);
+    db.prepare(`UPDATE beneficiaries SET organisation_id = ?`).run(targetOrgId);
+    db.prepare(`UPDATE payment_instructions SET organisation_id = ?`).run(targetOrgId);
+    db.prepare(`UPDATE trade_transactions SET organisation_id = ?`).run(targetOrgId);
+    db.prepare(`UPDATE receivables_facilities SET organisation_id = ?`).run(targetOrgId);
+    db.prepare(`UPDATE receivables_messages SET organisation_id = ?`).run(targetOrgId);
+    db.prepare(`UPDATE receivables_draws SET organisation_id = ?`).run(targetOrgId);
+    db.prepare(`UPDATE receivables_limit_requests SET organisation_id = ?`).run(targetOrgId);
+    db.prepare(`UPDATE statements SET organisation_id = ?`).run(targetOrgId);
+    db.prepare(`UPDATE service_requests SET organisation_id = ?`).run(targetOrgId);
+    db.prepare(`UPDATE approval_policies SET organisation_id = ?`).run(targetOrgId);
+    db.prepare(`UPDATE payment_templates SET organisation_id = ?`).run(targetOrgId);
+    db.prepare(`UPDATE virtual_accounts SET organisation_id = ?`).run(targetOrgId);
+    db.prepare(`UPDATE batch_uploads SET organisation_id = ?`).run(targetOrgId);
+    db.prepare(`UPDATE supply_chain_finance SET organisation_id = ?`).run(targetOrgId);
+    db.prepare(`UPDATE securities_holdings SET organisation_id = ?`).run(targetOrgId);
+    db.prepare(`UPDATE afd_schedules SET organisation_id = ?`).run(targetOrgId);
+    db.prepare(`UPDATE users SET organisation_id = ? WHERE organisation_id IS NOT NULL`).run(targetOrgId);
+    db.prepare(`UPDATE organisation_users SET organisation_id = ?, is_default = 1 WHERE organisation_id != ? AND user_id NOT IN (SELECT user_id FROM organisation_users WHERE organisation_id = ?)`).run(targetOrgId, targetOrgId, targetOrgId);
+    db.prepare(`UPDATE organisation_users SET is_default = 1 WHERE organisation_id = ?`).run(targetOrgId);
+    db.prepare(`DELETE FROM organisation_users WHERE organisation_id != ?`).run(targetOrgId);
+    db.prepare(`DELETE FROM organisations WHERE id != ?`).run(targetOrgId);
+
+    db.prepare(`UPDATE cards SET cardholder_name = 'KARTHICK KRISHNA M S' WHERE cardholder_name = 'ALEXANDER VANCE'`).run();
+    db.prepare(`UPDATE notifications SET message = replace(message, 'Alexander Vance', 'Karthick Krishna M S') WHERE message LIKE '%Alexander Vance%'`).run();
+    db.prepare(`UPDATE beneficiaries SET name = 'Coralgenz Global Singapore Pte Ltd' WHERE name = 'Meridian Singapore Pte Ltd'`).run();
+    db.prepare(`UPDATE transactions SET counterparty_name = replace(counterparty_name, 'Meridian', 'Coralgenz Global') WHERE counterparty_name LIKE 'Meridian%'`).run();
+
+    const orgGbId = targetOrgId;
+    const primaryAcc = db.prepare(`SELECT id FROM accounts WHERE organisation_id = ? LIMIT 1`).get(orgGbId) as any;
+    const parentAccId = primaryAcc?.id || 'acc-in-1';
+
+    // 2. Seed rich Trade & Guarantees / Trade Loans if fewer than 5 records exist
+    const tradeCnt = (db.prepare(`SELECT COUNT(*) as cnt FROM trade_transactions`).get() as { cnt: number }).cnt;
+    if (tradeCnt < 5) {
+      const extraTrade = [
+        {
+          ref: 'TRD-2026-10810',
+          cat: 'GUARANTEE_STANDBY_DC',
+          dir: 'EXPORT',
+          party: 'Nordic Infrastructure AB',
+          amount: 120000,
+          cur: 'EUR',
+          status: 'AWAITING_AUTHORISATION',
+          action: 'Approve Standby Guarantee Extension (BL-CGLB-88412)',
+          docs: [{ id: 'doc-5', name: 'Standby_SBLC_Amendment_SE44.pdf', type: 'PDF', size: '310 KB' }],
+        },
+        {
+          ref: 'TRD-2026-10755',
+          cat: 'TRADE_LOAN',
+          dir: 'IMPORT',
+          party: 'Taiwan Semiconductor Foundry Co.',
+          amount: 245000,
+          cur: 'USD',
+          status: 'AWAITING_AUTHORISATION',
+          action: 'Authorise 90-Day Import Post-Shipment Loan (DHL-77492011)',
+          docs: [{ id: 'doc-6', name: 'Airway_Bill_DHL77492011.pdf', type: 'PDF', size: '540 KB' }],
+        },
+        {
+          ref: 'TRD-2026-10640',
+          cat: 'EXPORT_DC',
+          dir: 'EXPORT',
+          party: 'Emirates Industrial Holdings LLC',
+          amount: 310000,
+          cur: 'USD',
+          status: 'ISSUED',
+          action: 'Export Advised DC — Shipment Confirmed (BL-CGLB-91004)',
+          docs: [{ id: 'doc-7', name: 'Export_LC_Advice_DXB.pdf', type: 'PDF', size: '485 KB' }],
+        },
+      ];
+      for (const tr of extraTrade) {
+        const exists = db.prepare(`SELECT id FROM trade_transactions WHERE reference = ?`).get(tr.ref);
+        if (!exists) {
+          db.prepare(`
+            INSERT INTO trade_transactions (id, reference, organisation_id, trade_category, direction, counterparty, amount, currency, status, pending_action, documents_json, timeline_json, approval_history_json)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, '[]')
+          `).run(
+            uuidv4(), tr.ref, orgGbId, tr.cat, tr.dir, tr.party, tr.amount, tr.cur, tr.status, tr.action,
+            JSON.stringify(tr.docs),
+            JSON.stringify([{ id: 't1', stage: tr.status, label: tr.action, description: 'Coralgenz Global Trade Desk tracking active', timestamp: new Date().toISOString(), state: 'CURRENT' }])
+          );
+        }
+      }
+    }
+
+    // 3. Payment Templates
+    const tmplCnt = (db.prepare(`SELECT COUNT(*) as cnt FROM payment_templates`).get() as { cnt: number }).cnt;
+    if (tmplCnt === 0) {
+      const templates = [
+        { name: 'EU Supplier Monthly Retainer (Nordic Components)', type: 'RESTRICTED', cat: 'SEPA_PAYMENT', ben: 'Nordic Components GmbH', acc: 'DE89370400440532013000', bank: 'Deutsche Bank AG', country: 'DE', bic: 'DEUTDEFFXXX', cur: 'EUR', amt: 14500, ref: 'Coralgenz Global Monthly Actuator Supply' },
+        { name: 'UK Haulage Clearing Template', type: 'GENERAL', cat: 'PRIORITY_PAYMENT', ben: 'Thames Logistics Partners Ltd', acc: '200412-99014522', bank: 'Barclays Corporate UK', country: 'GB', bic: 'BARCGB22XXX', cur: 'GBP', amt: 3420, ref: 'UK Port Logistics Invoice' },
+        { name: 'US Fedwire Distribution Funding', type: 'GENERAL', cat: 'PRIORITY_PAYMENT', ben: 'Pacific Trade Holdings Inc', acc: '021000021-88910422', bank: 'JPMorgan Chase NA', country: 'US', bic: 'CHASUS33XXX', cur: 'USD', amt: 18500, ref: 'Coralgenz Global Americas Working Capital' },
+      ];
+      for (const t of templates) {
+        db.prepare(`
+          INSERT INTO payment_templates (id, organisation_id, name, category, template_type, debit_account_id, beneficiary_name, beneficiary_account, beneficiary_bank, destination_country, swift_bic, currency, default_amount, reference_note, status, created_by)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'ACTIVE', 'Karthick Krishna M S')
+        `).run(uuidv4(), orgGbId, t.name, t.cat, t.type, parentAccId, t.ben, t.acc, t.bank, t.country, t.bic, t.cur, t.amt, t.ref);
+      }
+    }
+
+    // 4. Virtual Accounts
+    const vaCnt = (db.prepare(`SELECT COUNT(*) as cnt FROM virtual_accounts`).get() as { cnt: number }).cnt;
+    if (vaCnt === 0) {
+      const vas = [
+        { num: 'VA-GB-900101', name: 'Coralgenz Global EMEA Enterprise Collections', region: 'United Kingdom & Europe', line: 'B2B Enterprise Billing', cur: 'GBP', bal: 18420.50, rec: 42 },
+        { num: 'VA-GB-900102', name: 'Coralgenz Global D2C Marketplace Settlement', region: 'United Kingdom', line: 'Digital Commerce', cur: 'GBP', bal: 9310.00, rec: 118 },
+        { num: 'VA-EU-900204', name: 'Coralgenz Global DACH Distributor Receipts', region: 'Germany', line: 'Industrial Hardware', cur: 'EUR', bal: 44800.00, rec: 27 },
+      ];
+      for (const va of vas) {
+        db.prepare(`
+          INSERT INTO virtual_accounts (id, organisation_id, parent_account_id, virtual_number, account_name, region, business_line, currency, allocated_balance, reconciled_count, status)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'ACTIVE')
+        `).run(uuidv4(), orgGbId, parentAccId, va.num, va.name, va.region, va.line, va.cur, va.bal, va.rec);
+      }
+    }
+
+    // 5. Batch File Uploads
+    const batchCnt = (db.prepare(`SELECT COUNT(*) as cnt FROM batch_uploads`).get() as { cnt: number }).cnt;
+    if (batchCnt === 0) {
+      db.prepare(`
+        INSERT INTO batch_uploads (id, reference, organisation_id, filename, format, total_count, valid_count, error_count, total_amount, currency, status, validation_summary_json, uploaded_by)
+        VALUES (?, 'BATCH-2026-8801', ?, 'coralgenz_uk_payroll_nov2026.xml', 'ISO20022_XML', 24, 24, 0, 42850.00, 'GBP', 'SETTLED', ?, 'Karthick Krishna M S')
+      `).run(uuidv4(), orgGbId, JSON.stringify(['pain.001.001.03 schema validated', '24 beneficiary IBAN/Sort Code checks passed', 'Zero duplicate end-to-end IDs']));
+    }
+
+    // 6. Supply Chain Finance
+    const scfCnt = (db.prepare(`SELECT COUNT(*) as cnt FROM supply_chain_finance`).get() as { cnt: number }).cnt;
+    if (scfCnt === 0) {
+      const scfRows = [
+        { ref: 'SCF-2026-4101', sup: 'Nordic Components GmbH', inv: 'INV-NC-98241', amt: 64000, cur: 'EUR', mat: '2027-01-25', disc: 3.15, net: 63664.00, status: 'OFFER_AVAILABLE' },
+        { ref: 'SCF-2026-4102', sup: 'Shenzhen Precision Electronics Co.', inv: 'INV-SZ-55410', amt: 112500, cur: 'USD', mat: '2027-02-10', disc: 3.45, net: 111724.00, status: 'OFFER_AVAILABLE' },
+        { ref: 'SCF-2026-4098', sup: 'Precision Castings India Pvt Ltd', inv: 'INV-PC-33108', amt: 45000, cur: 'USD', mat: '2026-12-28', disc: 2.95, net: 44810.00, status: 'APPROVED_EARLY_PAY' },
+      ];
+      for (const s of scfRows) {
+        db.prepare(`
+          INSERT INTO supply_chain_finance (id, reference, organisation_id, supplier_name, invoice_number, invoice_amount, currency, maturity_date, discount_rate_pct, net_settlement, early_pay_status)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `).run(uuidv4(), s.ref, orgGbId, s.sup, s.inv, s.amt, s.cur, s.mat, s.disc, s.net, s.status);
+      }
+    }
+
+    // 7. Securities Holdings (HSBC Securities Services)
+    const secCnt = (db.prepare(`SELECT COUNT(*) as cnt FROM securities_holdings`).get() as { cnt: number }).cnt;
+    if (secCnt === 0) {
+      const secs = [
+        { isin: 'GB00BM8Z2V59', name: 'UK Treasury Gilt 4.125% Jan 2027', cls: 'SOVEREIGN_BOND', acc: 'HSS-CGLB-CUST-01', qty: 150000, val: 149250.00, cur: 'GBP', accr: 2180.40, caStat: 'NONE', caDet: 'Coupon due 29 Jan 2027' },
+        { isin: 'US912828YV68', name: 'US Treasury Note 3.875% 2027', cls: 'SOVEREIGN_BOND', acc: 'HSS-CGLB-CUST-01', qty: 200000, val: 198400.00, cur: 'USD', accr: 3120.00, caStat: 'ACTION_REQUIRED', caDet: 'Optional Tender Offer — Election Cutoff 10 Dec 2026' },
+        { isin: 'IE00B44Z5B48', name: 'HSBC Global Sterling Liquidity Fund (Class A)', cls: 'MONEY_MARKET_FUND', acc: 'HSS-CGLB-CUST-02', qty: 85000, val: 85412.50, cur: 'GBP', accr: 412.50, caStat: 'NONE', caDet: 'Daily accumulating share class' },
+      ];
+      for (const h of secs) {
+        db.prepare(`
+          INSERT INTO securities_holdings (id, organisation_id, isin, security_name, asset_class, custodian_account, quantity, market_value, currency, accrued_income, corp_action_status, corp_action_detail)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `).run(uuidv4(), orgGbId, h.isin, h.name, h.cls, h.acc, h.qty, h.val, h.cur, h.accr, h.caStat, h.caDet);
+      }
+    }
+
+    // 8. Automated File Delivery (AFD)
+    const afdCnt = (db.prepare(`SELECT COUNT(*) as cnt FROM afd_schedules`).get() as { cnt: number }).cnt;
+    if (afdCnt === 0) {
+      db.prepare(`
+        INSERT INTO afd_schedules (id, organisation_id, report_type, format, frequency, delivery_channel, recipient, status)
+        VALUES (?, ?, 'End-of-Day Multi-Currency Statement', 'MT940', 'DAILY', 'ERP_SFTP', 'erp-treasury@coralgenz.com', 'ACTIVE')
+      `).run(uuidv4(), orgGbId);
+      db.prepare(`
+        INSERT INTO afd_schedules (id, organisation_id, report_type, format, frequency, delivery_channel, recipient, status)
+        VALUES (?, ?, 'Global Cash Position Summary', 'BAI2', 'WEEKLY', 'SFTP_PORTAL', 'karthick.krishna@coralgenz.com', 'ACTIVE')
+      `).run(uuidv4(), orgGbId);
     }
   });
 }

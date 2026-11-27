@@ -118,8 +118,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           setAccessToken(null);
         }
       }
-      // Subtle brief launch transition (max 450ms, no artificial delay)
-      setTimeout(() => setPhase('UNAUTHENTICATED'), 350);
+      // Display HSBCnet photographic launch splash cleanly before entering Welcome username flow
+      setTimeout(() => setPhase('UNAUTHENTICATED'), 1600);
     } catch (err: any) {
       setInitError(err?.message || 'Unable to reach HSBC Cnet gateway. Check that the API service is running.');
       setPhase('INIT_ERROR');

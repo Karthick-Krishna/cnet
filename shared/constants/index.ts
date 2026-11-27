@@ -1,13 +1,15 @@
 import { DESIGN_TOKENS } from '../designTokens';
 
 export const BANK_CONFIG = {
-  appName: 'HSBC Cnet',
-  fullTitle: 'HSBC Cnet Corporate Banking',
-  adminAppName: 'HSBC Cnet Operations Admin',
-  tagline: 'Global Corporate Cash Management, Payments & Trade',
-  version: '4.2.0-enterprise',
+  appName: 'HSBCnet',
+  fullTitle: 'HSBCnet Corporate Banking — Coralgenz Global',
+  adminAppName: 'HSBCnet Operations Admin',
+  companyName: 'Coralgenz Global',
+  primaryUserName: 'Karthick Krishna M S',
+  tagline: 'Global Corporate Cash Management, Payments, Trade & Markets',
+  version: '4.8.0-enterprise',
   disclaimer:
-    'Sandbox Demonstration Environment for HSBC Cnet. Balances, FX quotes, and settlements operate in an internal sandbox ledger unless connected to an authorised banking API.',
+    'Sandbox Demonstration Environment for Coralgenz Global on HSBCnet. Balances, FX quotes, trade facilities, and settlements operate in an internal sandbox ledger.',
   defaultCurrency: 'GBP',
   currencySymbols: {
     GBP: '£',
@@ -35,8 +37,8 @@ export const BANK_CONFIG = {
   },
   defaultBranch: {
     name: 'Canary Wharf Corporate Hub',
-    ifsc: 'MRDNGB2LXXX',
-    swift: 'MRDNGB2LXXX',
+    ifsc: 'CGLBGB2LXXX',
+    swift: 'CGLBGB2LXXX',
     city: 'London',
     country: 'GB',
   },

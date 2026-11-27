@@ -229,7 +229,7 @@ describe('MeridianNet Corporate Banking - Enterprise Transformation Suite', () =
     adminToken = admRes.body.accessToken;
 
     const accRes = await request(app)
-      .get('/api/corporate/accounts?orgId=org-meridian-gb')
+      .get('/api/corporate/accounts?orgId=org-meridian-in')
       .set('Authorization', `Bearer ${initiatorToken}`);
     expect(accRes.status).toBe(200);
     expect(accRes.body.accounts.length).toBeGreaterThan(0);
@@ -261,7 +261,7 @@ describe('MeridianNet Corporate Banking - Enterprise Transformation Suite', () =
       .post('/api/corporate/payments')
       .set('Authorization', `Bearer ${initiatorToken}`)
       .send({
-        orgId: 'org-meridian-gb',
+        orgId: 'org-meridian-in',
         category: 'PRIORITY_PAYMENT',
         debitAccountId: orgGbAccId,
         beneficiaryName: 'Thames Logistics Partners Ltd',
@@ -280,14 +280,14 @@ describe('MeridianNet Corporate Banking - Enterprise Transformation Suite', () =
     const selfApprove = await request(app)
       .post('/api/corporate/authorisations/decide')
       .set('Authorization', `Bearer ${initiatorToken}`)
-      .send({ orgId: 'org-meridian-gb', ids: [createdPaymentId], decision: 'APPROVED', stepUpPin: '123456' });
+      .send({ orgId: 'org-meridian-in', ids: [createdPaymentId], decision: 'APPROVED', stepUpPin: '123456' });
     expect(selfApprove.status).toBe(403);
 
     // Authoriser without step-up PIN gets STEP_UP_REQUIRED
     const missingPin = await request(app)
       .post('/api/corporate/authorisations/decide')
       .set('Authorization', `Bearer ${authoriserToken}`)
-      .send({ orgId: 'org-meridian-gb', ids: [createdPaymentId], decision: 'APPROVED' });
+      .send({ orgId: 'org-meridian-in', ids: [createdPaymentId], decision: 'APPROVED' });
     expect(missingPin.status).toBe(401);
     expect(missingPin.body.code).toBe('STEP_UP_REQUIRED');
 
@@ -295,12 +295,12 @@ describe('MeridianNet Corporate Banking - Enterprise Transformation Suite', () =
     const approved = await request(app)
       .post('/api/corporate/authorisations/decide')
       .set('Authorization', `Bearer ${authoriserToken}`)
-      .send({ orgId: 'org-meridian-gb', ids: [createdPaymentId], decision: 'APPROVED', stepUpPin: '123456' });
+      .send({ orgId: 'org-meridian-in', ids: [createdPaymentId], decision: 'APPROVED', stepUpPin: '123456' });
     expect(approved.status).toBe(200);
     expect(approved.body.results[0].status).toBe('COMPLETED');
   });
 
-  it('should enforce country-gated Remote Deposit Capture rules (disabled in IN, enabled in GB)', async () => {
+  it('should enforce country-gated Remote Deposit Capture rules and single-company isolation', async () => {
     const premierRes = await request(app)
       .post('/api/auth/login')
       .send({ identifier: 'premier_user', password: 'Password@123' });
@@ -311,14 +311,9 @@ describe('MeridianNet Corporate Banking - Enterprise Transformation Suite', () =
       .set('Authorization', `Bearer ${premierToken}`);
     expect(inRes.status).toBe(403);
 
-    const gbRes = await request(app)
-      .get('/api/corporate/rdc?orgId=org-meridian-gb')
-      .set('Authorization', `Bearer ${premierToken}`);
-    expect(gbRes.status).toBe(200);
-
-    // Cross-org isolation: corp_initiator cannot access org-meridian-in
+    // Non-member org request denied
     const crossOrgRes = await request(app)
-      .get('/api/corporate/accounts?orgId=org-meridian-in')
+      .get('/api/corporate/accounts?orgId=org-nonexistent-co')
       .set('Authorization', `Bearer ${initiatorToken}`);
     expect(crossOrgRes.status).toBe(403);
   });
@@ -328,7 +323,7 @@ describe('MeridianNet Corporate Banking - Enterprise Transformation Suite', () =
       .get('/api/admin/enterprise-summary')
       .set('Authorization', `Bearer ${adminToken}`);
     expect(sumRes.status).toBe(200);
-    expect(sumRes.body.summary.organisations).toBeGreaterThanOrEqual(3);
+    expect(sumRes.body.summary.organisations).toBe(1);
 
     const audRes = await request(app)
       .get('/api/admin/audit-logs')

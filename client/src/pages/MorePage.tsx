@@ -38,6 +38,15 @@ import {
   StatusBadge,
 } from '../components/ui/Primitives';
 import { LiquidityView, ReceivablesView, TradeFinanceView, RdcView, SelfServiceView } from './EnterpriseServicesPages';
+import {
+  FileUploadView,
+  FxMarketsView,
+  PaymentTemplatesView,
+  ReportsFilesView,
+  SecuritiesServicesView,
+  TradeSuiteView,
+  VirtualAccountsView,
+} from './ExtendedPortalPages';
 import { detectPasskeySupport, parseCreationOptions, serializeCredential, signalUnknownCredentialIfSupported } from '../lib/webauthn';
 
 export type MoreSubView =
@@ -50,12 +59,23 @@ export type MoreSubView =
   | 'MOBILE_AUTH'
   | 'ALERTS'
   | 'FX_RATES'
+  | 'FX_MARKETS'
   | 'SUPPORT'
   | 'SUPPORT_CHAT'
   | 'INFO'
   | 'LIQUIDITY'
   | 'TRADE'
+  | 'TRADE_HUB'
+  | 'TRADE_DC'
+  | 'TRADE_GUARANTEES'
+  | 'TRADE_TRACKER'
+  | 'TRADE_SCF'
   | 'RECEIVABLES'
+  | 'VIRTUAL_ACCOUNTS'
+  | 'PAYMENT_TEMPLATES'
+  | 'FILE_UPLOAD'
+  | 'REPORTS_FILES'
+  | 'SECURITIES'
   | 'RDC'
   | 'SELF_SERVICE';
 
@@ -740,6 +760,19 @@ export const MorePage: React.FC<{ initialSubView?: string; onResetSubView?: () =
     );
   }
 
+  // Extended Enterprise Services views
+  if (subView === 'TRADE_HUB') return <TradeSuiteView initialTab="DASHBOARD" />;
+  if (subView === 'TRADE_DC') return <TradeSuiteView initialTab="DOC_CREDITS" />;
+  if (subView === 'TRADE_GUARANTEES') return <TradeSuiteView initialTab="GUARANTEES" />;
+  if (subView === 'TRADE_TRACKER') return <TradeSuiteView initialTab="TRACKER" />;
+  if (subView === 'TRADE_SCF') return <TradeSuiteView initialTab="SCF" />;
+  if (subView === 'VIRTUAL_ACCOUNTS') return <VirtualAccountsView />;
+  if (subView === 'PAYMENT_TEMPLATES') return <PaymentTemplatesView />;
+  if (subView === 'FILE_UPLOAD') return <FileUploadView />;
+  if (subView === 'REPORTS_FILES') return <ReportsFilesView />;
+  if (subView === 'FX_MARKETS') return <FxMarketsView />;
+  if (subView === 'SECURITIES') return <SecuritiesServicesView />;
+
   // FX EXCHANGE RATES (Preview exchange rates board)
   if (subView === 'FX_RATES') {
     return (
@@ -971,10 +1004,27 @@ export const MorePage: React.FC<{ initialSubView?: string; onResetSubView?: () =
             </li>
           )}
           {hasPermission('ACCESS_TRADE_FINANCE') && hasModule('tradeFinance') && (
-            <li>
-              <DarkMenuRow icon={ShieldCheck} label="Trade authorisation" onClick={() => setSubView('TRADE')} />
-            </li>
+            <>
+              <li>
+                <DarkMenuRow icon={ShieldCheck} label="Trade & Supply Chain Suite" onClick={() => setSubView('TRADE_HUB')} />
+              </li>
+              <li>
+                <DarkMenuRow icon={FileCheck} label="Trade authorisation" onClick={() => setSubView('TRADE')} />
+              </li>
+            </>
           )}
+          <li>
+            <DarkMenuRow icon={KeyRound} label="Payment templates" onClick={() => setSubView('PAYMENT_TEMPLATES')} />
+          </li>
+          <li>
+            <DarkMenuRow icon={FileText} label="File upload (ISO 20022 / CSV)" onClick={() => setSubView('FILE_UPLOAD')} />
+          </li>
+          <li>
+            <DarkMenuRow icon={Landmark} label="Virtual accounts" onClick={() => setSubView('VIRTUAL_ACCOUNTS')} />
+          </li>
+          <li>
+            <DarkMenuRow icon={FileText} label="Reports & files (MT940/BAI2)" onClick={() => setSubView('REPORTS_FILES')} />
+          </li>
           <li>
             <DarkMenuRow
               icon={Bell}
@@ -984,7 +1034,10 @@ export const MorePage: React.FC<{ initialSubView?: string; onResetSubView?: () =
             />
           </li>
           <li>
-            <DarkMenuRow icon={CircleDollarSign} label="FX exchange rates" onClick={() => setSubView('FX_RATES')} />
+            <DarkMenuRow icon={CircleDollarSign} label="Markets & FX Deal Desk" onClick={() => setSubView('FX_MARKETS')} />
+          </li>
+          <li>
+            <DarkMenuRow icon={TrendingUp} label="Securities Services (HSS)" onClick={() => setSubView('SECURITIES')} />
           </li>
           {hasPermission('VIEW_LIQUIDITY') && hasModule('liquidity') && (
             <li>

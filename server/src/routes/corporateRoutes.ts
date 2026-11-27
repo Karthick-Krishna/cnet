@@ -1038,3 +1038,250 @@ corporateRouter.post('/self-service', authenticateToken, (req: AuthRequest, res:
   const created = db.prepare(`SELECT * FROM service_requests WHERE id = ?`).get(id);
   res.json({ success: true, request: created });
 });
+
+// ============================================================================
+// EXTENDED HSBCnet SUITE: TEMPLATES, VIRTUAL ACCOUNTS, FILE UPLOAD,
+// TRADE CREATION, SUPPLY CHAIN FINANCE, SECURITIES, FX DEALS & REPORTS/AFD
+// ============================================================================
+
+// Payment Templates (General & Restricted)
+corporateRouter.get('/templates', authenticateToken, (req: AuthRequest, res: Response): void => {
+  const ctx = getUserMembership(req.user!.id, req.query.orgId as string | undefined);
+  if (!ctx.activeOrg) {
+    res.status(404).json({ success: false, error: 'Organisation not found.' });
+    return;
+  }
+  const templates = db.prepare(`SELECT * FROM payment_templates WHERE organisation_id = ? ORDER BY created_at DESC`).all(ctx.activeOrg.id);
+  res.json({ success: true, templates });
+});
+
+corporateRouter.post('/templates', authenticateToken, (req: AuthRequest, res: Response): void => {
+  const { orgId, name, category = 'PRIORITY_PAYMENT', templateType = 'GENERAL', debitAccountId, beneficiaryName, beneficiaryAccount, beneficiaryBank, destinationCountry = 'GB', swiftBic = '', currency = 'GBP', defaultAmount = 0, referenceNote = '' } = req.body;
+  const ctx = getUserMembership(req.user!.id, orgId);
+  if (!ctx.activeOrg || !hasPerm(ctx.activeOrg.permissions, 'CREATE_PAYMENTS')) {
+    res.status(403).json({ success: false, error: 'Permission CREATE_PAYMENTS required.' });
+    return;
+  }
+  const id = uuidv4();
+  db.prepare(`
+    INSERT INTO payment_templates (id, organisation_id, name, category, template_type, debit_account_id, beneficiary_name, beneficiary_account, beneficiary_bank, destination_country, swift_bic, currency, default_amount, reference_note, status, created_by)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'ACTIVE', ?)
+  `).run(id, ctx.activeOrg.id, name, category, templateType, debitAccountId, beneficiaryName, beneficiaryAccount, beneficiaryBank, destinationCountry, swiftBic, currency, Number(defaultAmount) || 0, referenceNote, req.user!.full_name);
+  const template = db.prepare(`SELECT * FROM payment_templates WHERE id = ?`).get(id);
+  res.json({ success: true, template });
+});
+
+corporateRouter.post('/templates/:id/execute', authenticateToken, (req: AuthRequest, res: Response): void => {
+  const { orgId, amount } = req.body;
+  const ctx = getUserMembership(req.user!.id, orgId);
+  if (!ctx.activeOrg || !hasPerm(ctx.activeOrg.permissions, 'CREATE_PAYMENTS')) {
+    res.status(403).json({ success: false, error: 'Permission CREATE_PAYMENTS required.' });
+    return;
+  }
+  const tmpl = db.prepare(`SELECT * FROM payment_templates WHERE id = ? AND organisation_id = ?`).get(req.params.id, ctx.activeOrg.id) as any;
+  if (!tmpl) {
+    res.status(404).json({ success: false, error: 'Payment template not found.' });
+    return;
+  }
+  const execAmount = tmpl.template_type === 'RESTRICTED' ? tmpl.default_amount : Number(amount || tmpl.default_amount);
+  const acc = db.prepare(`SELECT * FROM accounts WHERE id = ?`).get(tmpl.debit_account_id) as any;
+  const ref = `PAY-${new Date().getFullYear()}-${Math.floor(10000 + Math.random() * 89999)}`;
+  const id = uuidv4();
+  const nowIso = new Date().toISOString();
+  db.prepare(`
+    INSERT INTO payment_instructions (
+      id, reference, organisation_id, initiator_id, initiator_name, category, debit_account_id,
+      debit_account_name, debit_currency, beneficiary_name, beneficiary_account, beneficiary_bank,
+      destination_country, swift_bic, amount, currency, exchange_rate, converted_amount,
+      charges_bearer, charges_amount, payment_purpose, payment_date, reference_note, status,
+      required_approvals, current_approvals, approval_history_json, timeline_json, unusual_flags_json
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1.0, ?, 'SHA', 8, 'SUPP', ?, ?, 'AWAITING_AUTHORISATION', 1, 0, '[]', ?, '[]')
+  `).run(
+    id, ref, ctx.activeOrg.id, req.user!.id, req.user!.full_name, tmpl.category, tmpl.debit_account_id,
+    acc?.account_name || 'Corporate Account', acc?.currency || tmpl.currency, tmpl.beneficiary_name, tmpl.beneficiary_account, tmpl.beneficiary_bank,
+    tmpl.destination_country, tmpl.swift_bic, execAmount, tmpl.currency, execAmount, nowIso.slice(0, 10),
+    `[Template: ${tmpl.name}] ${tmpl.reference_note || ''}`,
+    JSON.stringify([{ id: uuidv4(), stage: 'CREATED', label: 'Created from template', description: `Executed by ${req.user!.full_name} using ${tmpl.template_type} template`, timestamp: nowIso, state: 'CURRENT' }])
+  );
+  res.json({ success: true, reference: ref });
+});
+
+corporateRouter.delete('/templates/:id', authenticateToken, (req: AuthRequest, res: Response): void => {
+  db.prepare(`DELETE FROM payment_templates WHERE id = ?`).run(req.params.id);
+  res.json({ success: true });
+});
+
+// Virtual Accounts
+corporateRouter.get('/virtual-accounts', authenticateToken, (req: AuthRequest, res: Response): void => {
+  const ctx = getUserMembership(req.user!.id, req.query.orgId as string | undefined);
+  if (!ctx.activeOrg) {
+    res.status(404).json({ success: false, error: 'Organisation not found.' });
+    return;
+  }
+  const virtualAccounts = db.prepare(`SELECT * FROM virtual_accounts WHERE organisation_id = ? ORDER BY created_at DESC`).all(ctx.activeOrg.id);
+  res.json({ success: true, virtualAccounts });
+});
+
+corporateRouter.post('/virtual-accounts', authenticateToken, (req: AuthRequest, res: Response): void => {
+  const { orgId, parentAccountId, accountName, region, businessLine, currency = 'GBP' } = req.body;
+  const ctx = getUserMembership(req.user!.id, orgId);
+  if (!ctx.activeOrg) {
+    res.status(403).json({ success: false, error: 'Access denied.' });
+    return;
+  }
+  const id = uuidv4();
+  const vNum = `VA-${ctx.activeOrg.country}-${Math.floor(100000 + Math.random() * 899999)}`;
+  db.prepare(`
+    INSERT INTO virtual_accounts (id, organisation_id, parent_account_id, virtual_number, account_name, region, business_line, currency, allocated_balance, reconciled_count, status)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, 0, 'ACTIVE')
+  `).run(id, ctx.activeOrg.id, parentAccountId, vNum, accountName, region || ctx.activeOrg.country, businessLine || 'Commercial Treasury', currency);
+  const virtualAccount = db.prepare(`SELECT * FROM virtual_accounts WHERE id = ?`).get(id);
+  res.json({ success: true, virtualAccount });
+});
+
+corporateRouter.post('/virtual-accounts/:id/reconcile', authenticateToken, (req: AuthRequest, res: Response): void => {
+  const amount = Number(req.body.amount || 2500);
+  db.prepare(`UPDATE virtual_accounts SET allocated_balance = allocated_balance + ?, reconciled_count = reconciled_count + 1 WHERE id = ?`).run(amount, req.params.id);
+  res.json({ success: true });
+});
+
+// Batch File Upload (ISO 20022 XML, CSV, BACS, ACH)
+corporateRouter.get('/file-uploads', authenticateToken, (req: AuthRequest, res: Response): void => {
+  const ctx = getUserMembership(req.user!.id, req.query.orgId as string | undefined);
+  if (!ctx.activeOrg) {
+    res.status(404).json({ success: false, error: 'Organisation not found.' });
+    return;
+  }
+  const uploads = db.prepare(`SELECT * FROM batch_uploads WHERE organisation_id = ? ORDER BY created_at DESC`).all(ctx.activeOrg.id) as any[];
+  res.json({ success: true, uploads: uploads.map((u) => ({ ...u, validationSummary: JSON.parse(u.validation_summary_json || '[]') })) });
+});
+
+corporateRouter.post('/file-uploads', authenticateToken, (req: AuthRequest, res: Response): void => {
+  const { orgId, filename, format = 'CSV', currency = 'GBP', rows = [] } = req.body;
+  const ctx = getUserMembership(req.user!.id, orgId);
+  if (!ctx.activeOrg || !hasPerm(ctx.activeOrg.permissions, 'CREATE_PAYMENTS')) {
+    res.status(403).json({ success: false, error: 'Permission CREATE_PAYMENTS required.' });
+    return;
+  }
+  const parsedRows = Array.isArray(rows) && rows.length > 0 ? rows : [{ beneficiary: 'Nordic Components GmbH', amount: 4200 }, { beneficiary: 'Thames Logistics Partners Ltd', amount: 1850 }];
+  const totalAmount = parsedRows.reduce((s: number, r: any) => s + (Number(r.amount) || 0), 0);
+  const errorCount = parsedRows.filter((r: any) => !r.amount || Number(r.amount) <= 0).length;
+  const validCount = parsedRows.length - errorCount;
+  const ref = `BATCH-${new Date().getFullYear()}-${Math.floor(1000 + Math.random() * 8999)}`;
+  const id = uuidv4();
+  const summary = [`Format verified: ${format}`, `${validCount} valid instructions queued for authorisation`, `Total settlement value: ${currency} ${totalAmount.toFixed(2)}`];
+  db.prepare(`
+    INSERT INTO batch_uploads (id, reference, organisation_id, filename, format, total_count, valid_count, error_count, total_amount, currency, status, validation_summary_json, uploaded_by)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'AWAITING_AUTHORISATION', ?, ?)
+  `).run(id, ref, ctx.activeOrg.id, filename || 'payment_batch.csv', format, parsedRows.length, validCount, errorCount, totalAmount, currency, JSON.stringify(summary), req.user!.full_name);
+  const upload = db.prepare(`SELECT * FROM batch_uploads WHERE id = ?`).get(id) as any;
+  res.json({ success: true, upload: { ...upload, validationSummary: summary } });
+});
+
+// Create Trade Finance Application (Import/Export DC, Guarantee/SBLC, Collection, Trade Loan)
+corporateRouter.post('/trade', authenticateToken, (req: AuthRequest, res: Response): void => {
+  const { orgId, tradeCategory = 'IMPORT_DC', direction = 'IMPORT', counterparty, amount, currency = 'USD', actionDescription = 'Authorise New Trade Application', billOfLading = '' } = req.body;
+  const ctx = getUserMembership(req.user!.id, orgId);
+  if (!ctx.activeOrg || !hasPerm(ctx.activeOrg.permissions, 'ACCESS_TRADE_FINANCE')) {
+    res.status(403).json({ success: false, error: 'Permission ACCESS_TRADE_FINANCE required.' });
+    return;
+  }
+  const ref = `TRD-${new Date().getFullYear()}-${Math.floor(10000 + Math.random() * 89999)}`;
+  const id = uuidv4();
+  const nowIso = new Date().toISOString();
+  const trackingNote = billOfLading ? `${actionDescription} (${billOfLading})` : actionDescription;
+  const docs = [{ id: uuidv4(), name: `${tradeCategory}_${ref}.pdf`, type: 'PDF', size: '380 KB' }];
+  const timeline = [
+    { id: uuidv4(), stage: 'APPLIED', label: 'Application Submitted', description: `Submitted by ${req.user!.full_name} for ${ctx.activeOrg.name}`, timestamp: nowIso, state: 'COMPLETED' },
+    { id: uuidv4(), stage: 'AUTH', label: 'Awaiting Trade Authorisation', description: trackingNote, timestamp: nowIso, state: 'CURRENT' },
+  ];
+  db.prepare(`
+    INSERT INTO trade_transactions (id, reference, organisation_id, trade_category, direction, counterparty, amount, currency, status, pending_action, documents_json, timeline_json, approval_history_json)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'AWAITING_AUTHORISATION', ?, ?, ?, '[]')
+  `).run(id, ref, ctx.activeOrg.id, tradeCategory, direction, counterparty, Number(amount) || 0, currency, trackingNote, JSON.stringify(docs), JSON.stringify(timeline));
+  const created = db.prepare(`SELECT * FROM trade_transactions WHERE id = ?`).get(id) as any;
+  res.json({ success: true, transaction: { ...created, documents: docs, timeline, approvalHistory: [] } });
+});
+
+// Supply Chain Finance (Payables Early Payment Offers)
+corporateRouter.get('/scf', authenticateToken, (req: AuthRequest, res: Response): void => {
+  const ctx = getUserMembership(req.user!.id, req.query.orgId as string | undefined);
+  if (!ctx.activeOrg) {
+    res.status(404).json({ success: false, error: 'Organisation not found.' });
+    return;
+  }
+  const offers = db.prepare(`SELECT * FROM supply_chain_finance WHERE organisation_id = ? ORDER BY created_at DESC`).all(ctx.activeOrg.id);
+  res.json({ success: true, offers });
+});
+
+corporateRouter.post('/scf/:id/approve', authenticateToken, (req: AuthRequest, res: Response): void => {
+  db.prepare(`UPDATE supply_chain_finance SET early_pay_status = 'APPROVED_EARLY_PAY' WHERE id = ?`).run(req.params.id);
+  res.json({ success: true });
+});
+
+// HSBC Securities Services (Holdings & Corporate Actions)
+corporateRouter.get('/securities', authenticateToken, (req: AuthRequest, res: Response): void => {
+  const ctx = getUserMembership(req.user!.id, req.query.orgId as string | undefined);
+  if (!ctx.activeOrg) {
+    res.status(404).json({ success: false, error: 'Organisation not found.' });
+    return;
+  }
+  const holdings = db.prepare(`SELECT * FROM securities_holdings WHERE organisation_id = ? ORDER BY market_value DESC`).all(ctx.activeOrg.id);
+  res.json({ success: true, holdings });
+});
+
+corporateRouter.post('/securities/:id/elect', authenticateToken, (req: AuthRequest, res: Response): void => {
+  const election = req.body.election || 'TENDER_ELECTED';
+  db.prepare(`UPDATE securities_holdings SET corp_action_status = 'ELECTED', corp_action_detail = ? WHERE id = ?`).run(`Election confirmed (${election})`, req.params.id);
+  res.json({ success: true });
+});
+
+// Book FX Conversion Deal
+corporateRouter.post('/fx-deal', authenticateToken, (req: AuthRequest, res: Response): void => {
+  const { fromCurrency = 'GBP', toCurrency = 'USD', amount = 1000, settlementDate } = req.body;
+  const fromGbp = FX_TO_GBP[fromCurrency] || 1;
+  const toGbp = FX_TO_GBP[toCurrency] || 1;
+  const rate = Number((fromGbp / toGbp).toFixed(4));
+  const converted = Number((Number(amount) * rate).toFixed(2));
+  const dealRef = `FXD-${new Date().getFullYear()}-${Math.floor(10000 + Math.random() * 89999)}`;
+  res.json({
+    success: true,
+    deal: {
+      reference: dealRef,
+      fromCurrency,
+      toCurrency,
+      sellAmount: Number(amount),
+      buyAmount: converted,
+      rate,
+      valueDate: settlementDate || new Date().toISOString().slice(0, 10),
+      status: 'EXECUTED_SANDBOX',
+    },
+  });
+});
+
+// Reports & Automated File Delivery (AFD)
+corporateRouter.get('/reports/afd', authenticateToken, (req: AuthRequest, res: Response): void => {
+  const ctx = getUserMembership(req.user!.id, req.query.orgId as string | undefined);
+  if (!ctx.activeOrg) {
+    res.status(404).json({ success: false, error: 'Organisation not found.' });
+    return;
+  }
+  const schedules = db.prepare(`SELECT * FROM afd_schedules WHERE organisation_id = ? ORDER BY created_at DESC`).all(ctx.activeOrg.id);
+  res.json({ success: true, schedules });
+});
+
+corporateRouter.post('/reports/afd', authenticateToken, (req: AuthRequest, res: Response): void => {
+  const { orgId, reportType, format = 'MT940', frequency = 'DAILY', deliveryChannel = 'SFTP_PORTAL', recipient } = req.body;
+  const ctx = getUserMembership(req.user!.id, orgId);
+  if (!ctx.activeOrg) {
+    res.status(403).json({ success: false, error: 'Access denied.' });
+    return;
+  }
+  const id = uuidv4();
+  db.prepare(`
+    INSERT INTO afd_schedules (id, organisation_id, report_type, format, frequency, delivery_channel, recipient, status)
+    VALUES (?, ?, ?, ?, ?, ?, ?, 'ACTIVE')
+  `).run(id, ctx.activeOrg.id, reportType, format, frequency, deliveryChannel, recipient || req.user!.email);
+  const schedule = db.prepare(`SELECT * FROM afd_schedules WHERE id = ?`).get(id);
+  res.json({ success: true, schedule });
+});

@@ -5,15 +5,21 @@ import {
   ArrowUp,
   ArrowUpRight,
   ChevronDown,
+  ChevronLeft,
   ChevronRight,
   Download,
   Eye,
   EyeOff,
   FileText,
+  Filter,
+  Info,
+  Lock,
   RefreshCw,
   Search,
   SlidersHorizontal,
   Star,
+  Unlock,
+  X,
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { apiRequest } from '../lib/api';
@@ -57,15 +63,65 @@ interface AccountRow {
 }
 
 const CURRENCY_LABELS: Record<string, string> = {
-  AED: 'AED - UAE DIRHAM',
-  AUD: 'AUD - AUSTRALIAN DOLLAR',
-  EUR: 'EUR - EURO',
-  GBP: 'GBP - GREAT BRITISH POUNDS',
-  HKD: 'HKD - HONG KONG DOLLARS',
-  INR: 'INR - INDIAN RUPEE',
-  SGD: 'SGD - SINGAPORE DOLLAR',
-  USD: 'USD - US DOLLAR',
+  AED: 'AED - UAE Dirham',
+  AUD: 'AUD - Australian Dollar',
+  EUR: 'EUR - Euro',
+  GBP: 'GBP - Sterling Pound',
+  HKD: 'HKD - Hong Kong Dollar',
+  INR: 'INR - Indian Rupee',
+  SGD: 'SGD - Singapore Dollar',
+  USD: 'USD - US Dollar',
 };
+
+const COUNTRY_NAMES: Record<string, string> = {
+  GB: 'Great Britain KCTR',
+  IN: 'India KCTR',
+  DE: 'Germany KCTR',
+  US: 'United States KCTR',
+  SG: 'Singapore KCTR',
+};
+
+const HERO_SLIDES = [
+  {
+    id: 'tour',
+    image: '/welcome-bg.jpg',
+    title: 'Welcome to the start of your new HSBCnet. Here\'s a quick tour of the features that will help you do things faster and more easily.',
+    cta: 'Read more',
+    actionTab: 'MORE_TOUR',
+  },
+  {
+    id: 'award',
+    image: '/hero-turbine.jpg',
+    title: 'Coralgenz Global Treasury Portal — Real-time visibility across global accounts, Trade & Supply Chain, FX markets, and instant payment authorisations.',
+    cta: 'Read more',
+    actionTab: 'TRADE_HUB',
+  },
+  {
+    id: 'trade',
+    image: '/welcome-bg.jpg',
+    title: 'Trade and Supply Chain — Issue Documentary Credits, Bank Guarantees, Supply Chain Finance offers, and track Bills of Lading live.',
+    cta: 'Open Trade Suite',
+    actionTab: 'TRADE_HUB',
+  },
+  {
+    id: 'fx',
+    image: '/hero-turbine.jpg',
+    title: 'Global Markets & Virtual Accounts — Execute live Get Rate FX conversions and automate receivables reconciliation across Coralgenz Global.',
+    cta: 'Explore Markets',
+    actionTab: 'FX_MARKETS',
+  },
+];
+
+const SECURITY_NOTICES = [
+  {
+    lead: 'Business Email Compromise: a growing online security threat:',
+    rest: 'plus other articles to help you get the most out of HSBCnet.',
+  },
+  {
+    lead: 'Security Devices: do you know what to do when the battery is low?:',
+    rest: 'plus other articles to help you get the most out of HSBCnet.',
+  },
+];
 
 export const AccountsPage: React.FC<{ onNavigate?: (tab: string, sub?: string) => void }> = ({ onNavigate }) => {
   const { activeOrg, organisations, switchOrganisation, hideBalances, setHideBalances, hasPermission } = useAuth();
@@ -87,9 +143,24 @@ export const AccountsPage: React.FC<{ onNavigate?: (tab: string, sub?: string) =
   const [institutionFilter, setInstitutionFilter] = useState('ALL');
   const [currencyFilter, setCurrencyFilter] = useState('ALL');
   const [accountNumberFilter, setAccountNumberFilter] = useState('');
-  const [groupingMode, setGroupingMode] = useState<'CURRENCY' | 'LOCATION_CURRENCY'>('CURRENCY');
-  const [sortField, setSortField] = useState<'FAV' | 'NAME' | 'CURRENCY' | 'BALANCE' | 'NUMBER'>('CURRENCY');
+  const [accountScope, setAccountScope] = useState<'ALL' | 'FAVOURITES' | 'OPERATING' | 'TREASURY'>('ALL');
+  const [groupingMode, setGroupingMode] = useState<'CURRENCY' | 'LOCATION_CURRENCY'>('LOCATION_CURRENCY');
+  const [sortField, setSortField] = useState<'FAV' | 'NAME' | 'CURRENCY' | 'BALANCE' | 'NUMBER'>('NUMBER');
   const [sortDir, setSortDir] = useState<'ASC' | 'DESC'>('ASC');
+
+  // Portal toolbar controls matching HSBCnet screenshots
+  const [heroSlideIdx, setHeroSlideIdx] = useState(0);
+  const [showNoticeBanner, setShowNoticeBanner] = useState(true);
+  const [noticeIdx] = useState(0);
+  const [articlesModalOpen, setArticlesModalOpen] = useState(false);
+  const [tourModalOpen, setTourModalOpen] = useState(false);
+  const [showSubtotalRow, setShowSubtotalRow] = useState(true);
+  const [inlineFilterOpen, setInlineFilterOpen] = useState(false);
+  const [customiseOpen, setCustomiseOpen] = useState(false);
+  const [exportMenuOpen, setExportMenuOpen] = useState(false);
+  const [unmaskNumbers, setUnmaskNumbers] = useState(false);
+  const [showLedgerColumn, setShowLedgerColumn] = useState(false);
+  const [showSwiftColumn, setShowSwiftColumn] = useState(false);
 
   // Pending draft filters inside Filter/Sort drawer
   const [draftLoc, setDraftLoc] = useState('ALL');
@@ -267,6 +338,9 @@ export const AccountsPage: React.FC<{ onNavigate?: (tab: string, sub?: string) =
 
     return accounts
       .filter((a) => {
+        if (accountScope === 'FAVOURITES' && !a.isFavourite) return false;
+        if (accountScope === 'OPERATING' && !['SAVINGS', 'CURRENT', 'OPERATING'].includes(a.account_type)) return false;
+        if (accountScope === 'TREASURY' && !['TREASURY', 'FIXED_DEPOSIT', 'FOREIGN_CURRENCY'].includes(a.account_type)) return false;
         if (locationFilter !== 'ALL' && a.country !== locationFilter) return false;
         if (institutionFilter !== 'ALL' && (a.institution || a.branch_name) !== institutionFilter) return false;
         if (currencyFilter !== 'ALL' && a.currency !== currencyFilter) return false;
@@ -288,15 +362,14 @@ export const AccountsPage: React.FC<{ onNavigate?: (tab: string, sub?: string) =
         if (sortField === 'CURRENCY') return a.currency.localeCompare(b.currency) * dir || a.account_name.localeCompare(b.account_name);
         return (a.isFavourite === b.isFavourite ? a.favourite_order - b.favourite_order : a.isFavourite ? -1 : 1);
       });
-  }, [accounts, searchQuery, locationFilter, institutionFilter, currencyFilter, accountNumberFilter, sortField, sortDir]);
+  }, [accounts, accountScope, searchQuery, locationFilter, institutionFilter, currencyFilter, accountNumberFilter, sortField, sortDir]);
 
   const groupedAccounts = useMemo(() => {
     const groups: Record<string, AccountRow[]> = {};
     for (const acc of filteredAccounts) {
-      const key =
-        groupingMode === 'LOCATION_CURRENCY'
-          ? `${acc.country} • ${CURRENCY_LABELS[acc.currency] || acc.currency}`
-          : CURRENCY_LABELS[acc.currency] || `${acc.currency} Accounts`;
+      const countryTitle = COUNTRY_NAMES[acc.country] || acc.country;
+      const curTitle = CURRENCY_LABELS[acc.currency] || acc.currency;
+      const key = groupingMode === 'LOCATION_CURRENCY' ? `${countryTitle} (${curTitle})` : curTitle;
       if (!groups[key]) groups[key] = [];
       groups[key].push(acc);
     }
@@ -708,173 +781,574 @@ export const AccountsPage: React.FC<{ onNavigate?: (tab: string, sub?: string) =
   }
 
   // =========================================================================
-  // ACCOUNTS HOME — Matching mobile.pdf p.5 & liquidity.pdf p.1 structure
+  // ACCOUNTS HOME — Exact HSBCnet Desktop & Mobile Portal Workspace
   // =========================================================================
+  const activeSlide = HERO_SLIDES[heroSlideIdx] || HERO_SLIDES[0];
+  const activeNotice = SECURITY_NOTICES[noticeIdx] || SECURITY_NOTICES[0];
+
+  const handleHeaderSort = (field: 'FAV' | 'NAME' | 'BALANCE' | 'NUMBER') => {
+    if (sortField === field) {
+      setSortDir((d) => (d === 'ASC' ? 'DESC' : 'ASC'));
+    } else {
+      setSortField(field);
+      setSortDir('ASC');
+    }
+  };
+
+  const exportAccounts = (fmt: 'CSV' | 'MT940' | 'BAI2') => {
+    setExportMenuOpen(false);
+    const dateTag = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+    let content = '';
+    if (fmt === 'CSV') {
+      content =
+        'Account Number,Account Title,Country,Currency,Current Available,Ledger Balance,As At\n' +
+        filteredAccounts
+          .map(
+            (a) =>
+              `"${unmaskNumbers ? a.account_number : a.maskedAccountNumber}","${a.account_name}","${a.country}","${a.currency}",${a.available_balance},${a.ledger_balance},"${lastUpdated || new Date().toISOString()}"`
+          )
+          .join('\n');
+    } else if (fmt === 'MT940') {
+      content = filteredAccounts
+        .map(
+          (a) =>
+            `:20:CGLB${dateTag}\n:25:${a.account_number}\n:28C:00124/001\n:60F:C${dateTag.slice(2)}${a.currency}${Number(a.available_balance).toFixed(2).replace('.', ',')}\n:62F:C${dateTag.slice(2)}${a.currency}${Number(a.available_balance).toFixed(2).replace('.', ',')}\n-`
+        )
+        .join('\n');
+    } else {
+      content =
+        `01,HSBCNET,CORALGENZ,${dateTag},1915,1,80,,2/\n` +
+        filteredAccounts.map((a) => `03,${a.account_number},${a.currency},010,${Math.round(a.available_balance * 100)},,,/`).join('\n') +
+        '\n99,1,1,1/';
+    }
+    const blob = new Blob([content], { type: 'text/plain' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `Coralgenz_Account_Information_${fmt}_${dateTag}.${fmt === 'CSV' ? 'csv' : 'txt'}`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
   return (
-    <div className="bg-white md:border md:border-[#D9DEE1]">
-      <GeometricHeader
-        title="Accounts"
-        subtitle={activeOrg?.name}
-        actions={
-          <>
+    <div className="bg-white">
+      {/* 1. Full-Bleed Photographic Hero Carousel Banner (Matching uploaded screenshots) */}
+      <section aria-label="Welcome to HSBCnet banner" className="relative overflow-hidden bg-[#0E1317] min-h-[215px] sm:min-h-[250px] flex items-center">
+        <img
+          src={activeSlide.image}
+          alt=""
+          aria-hidden="true"
+          className="absolute inset-0 w-full h-full object-cover object-right opacity-90 transition-opacity duration-500"
+        />
+        <div
+          aria-hidden="true"
+          className="absolute inset-0 bg-gradient-to-r from-[#0B0F12]/95 via-[#0E1317]/65 to-transparent"
+        />
+
+        <div className="relative z-10 w-full max-w-[1440px] mx-auto px-4 sm:px-6 py-4">
+          <div className="max-w-[395px] text-white">
+            <h1 className="text-[22px] sm:text-[26px] font-normal tracking-tight leading-tight mb-2.5">
+              Welcome to HSBC<span className="italic font-light">net</span>
+            </h1>
+
+            <div className="bg-[#11161B]/80 border border-white/15 p-3.5 sm:p-4 backdrop-blur-[2px]">
+              <p className="text-xs leading-relaxed text-white/95 min-h-[60px]">{activeSlide.title}</p>
+              <button
+                type="button"
+                onClick={() => {
+                  if (activeSlide.actionTab === 'MORE_TOUR') {
+                    setTourModalOpen(true);
+                  } else {
+                    onNavigate?.('more', activeSlide.actionTab);
+                  }
+                }}
+                className="mt-2.5 inline-flex items-center gap-1 text-xs font-medium text-white hover:underline"
+              >
+                <span>{activeSlide.cta}</span>
+                <ChevronRight className="w-3.5 h-3.5" aria-hidden="true" />
+              </button>
+            </div>
+
+            {/* Carousel Pagination: < [ - - - - ] > */}
+            <div className="mt-2.5 flex items-center justify-between max-w-[395px]">
+              <button
+                type="button"
+                aria-label="Previous welcome highlight"
+                onClick={() => setHeroSlideIdx((i) => (i - 1 + HERO_SLIDES.length) % HERO_SLIDES.length)}
+                className="w-7 h-7 bg-[#22282E]/90 border border-white/15 flex items-center justify-center text-white/85 hover:text-white"
+              >
+                <ChevronLeft className="w-3.5 h-3.5" />
+              </button>
+
+              <div className="flex items-center gap-2" role="tablist" aria-label="Welcome slides">
+                {HERO_SLIDES.map((s, idx) => (
+                  <button
+                    key={s.id}
+                    type="button"
+                    aria-label={`Slide ${idx + 1}`}
+                    aria-selected={idx === heroSlideIdx}
+                    onClick={() => setHeroSlideIdx(idx)}
+                    className={`h-[3px] w-4 transition-colors ${idx === heroSlideIdx ? 'bg-[#DB001B]' : 'bg-white/40 hover:bg-white/65'}`}
+                  />
+                ))}
+              </div>
+
+              <button
+                type="button"
+                aria-label="Next welcome highlight"
+                onClick={() => setHeroSlideIdx((i) => (i + 1) % HERO_SLIDES.length)}
+                className="w-7 h-7 bg-[#22282E]/90 border border-white/15 flex items-center justify-center text-white/85 hover:text-white"
+              >
+                <ChevronRight className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* 2. Security & Portal Advisory Banner directly below Hero */}
+      {showNoticeBanner && (
+        <div className="max-w-[1440px] mx-auto px-4 sm:px-6 pt-3.5">
+          <div className="border border-[#5A656E] bg-[#EEF2F5] px-3.5 py-2.5 flex flex-wrap items-center justify-between gap-3 text-xs text-[#252B30]">
+            <div className="flex items-start sm:items-center gap-2.5 min-w-0">
+              <Info className="w-4 h-4 text-[#263640] shrink-0 mt-0.5 sm:mt-0" aria-hidden="true" />
+              <p className="leading-snug">
+                <strong className="font-semibold">{activeNotice.lead}</strong> {activeNotice.rest}{' '}
+                <button
+                  type="button"
+                  onClick={() => setArticlesModalOpen(true)}
+                  className="underline font-medium text-[#252B30] hover:text-[#DB001B]"
+                >
+                  Read all articles
+                </button>
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setShowNoticeBanner(false)}
+              className="text-xs text-[#68727A] hover:text-[#252B30] font-medium shrink-0 ml-auto"
+            >
+              Close
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* 3. Main Account Information Section */}
+      <div className="max-w-[1440px] mx-auto px-4 sm:px-6 py-5">
+        <div className="flex flex-wrap items-baseline justify-between gap-3 mb-4">
+          <div>
+            <h2 className="text-[24px] font-light text-[#252B30] tracking-tight">Account information</h2>
+            <p className="text-xs text-[#68727A] mt-0.5">
+              {activeOrg?.name} • Total available ({baseCurrency}):{' '}
+              <strong className="text-[#252B30] tabular-nums">
+                {totalAvailableBase === null ? 'Not Available' : formatFinancialCurrency(totalAvailableBase, baseCurrency, hideBalances)}
+              </strong>
+            </p>
+          </div>
+
+          {organisations.length > 1 && (
+            <div className="flex items-center gap-2 text-xs">
+              <span className="text-[#68727A]">Entity:</span>
+              <select
+                aria-label="Switch corporate entity"
+                value={activeOrg?.id || ''}
+                onChange={(e) => switchOrganisation(e.target.value)}
+                className="bg-white border border-[#B4BCC2] rounded-[2px] px-2.5 py-1.5 text-xs font-medium text-[#252B30]"
+              >
+                {organisations.map((o) => (
+                  <option key={o.id} value={o.id}>
+                    {o.name} ({o.country})
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+        </div>
+
+        {/* Exact HSBCnet Toolbar Row */}
+        <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-[#D9DEE1] text-xs">
+          {/* Left Toolbar Controls */}
+          <div className="flex flex-wrap items-center gap-3 sm:gap-4">
+            <select
+              aria-label="Account view scope"
+              value={accountScope}
+              onChange={(e) => setAccountScope(e.target.value as any)}
+              className="h-8 px-2.5 bg-white border border-[#B4BCC2] rounded-[2px] text-xs text-[#252B30]"
+            >
+              <option value="ALL">Show all accounts</option>
+              <option value="FAVOURITES">Favourites only ({favourites.length})</option>
+              <option value="OPERATING">Operating accounts</option>
+              <option value="TREASURY">Treasury &amp; Term reserves</option>
+            </select>
+
+            <div className="flex items-center gap-2.5">
+              <span className="text-[#68727A]">Group by</span>
+              <label className="inline-flex items-center gap-1.5 cursor-pointer">
+                <input
+                  type="radio"
+                  name="portal-grouping"
+                  checked={groupingMode === 'LOCATION_CURRENCY'}
+                  onChange={() => setGroupingMode('LOCATION_CURRENCY')}
+                  className="accent-[#263640]"
+                />
+                <span>Location/Currency</span>
+              </label>
+              <label className="inline-flex items-center gap-1.5 cursor-pointer">
+                <input
+                  type="radio"
+                  name="portal-grouping"
+                  checked={groupingMode === 'CURRENCY'}
+                  onChange={() => setGroupingMode('CURRENCY')}
+                  className="accent-[#263640]"
+                />
+                <span>Currency</span>
+              </label>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => setInlineFilterOpen((v) => !v)}
+              className={`h-8 px-2.5 inline-flex items-center gap-1.5 border rounded-[2px] ${
+                inlineFilterOpen || locationFilter !== 'ALL' || currencyFilter !== 'ALL' || searchQuery
+                  ? 'border-[#263640] bg-[#EEF2F5] font-medium text-[#252B30]'
+                  : 'border-transparent hover:border-[#D9DEE1] text-[#252B30]'
+              }`}
+            >
+              <Filter className="w-3.5 h-3.5" aria-hidden="true" />
+              <span>Filter</span>
+              <ChevronDown className="w-3.5 h-3.5" aria-hidden="true" />
+            </button>
+          </div>
+
+          {/* Right Toolbar Controls */}
+          <div className="flex flex-wrap items-center gap-2">
+            <label className="inline-flex items-center gap-1.5 mr-1 cursor-pointer select-none">
+              <input
+                type="checkbox"
+                checked={showSubtotalRow}
+                onChange={(e) => setShowSubtotalRow(e.target.checked)}
+                className="w-3.5 h-3.5 accent-[#263640]"
+              />
+              <span>Subtotal row</span>
+            </label>
+
+            <div className="relative">
+              <button
+                type="button"
+                onClick={() => { setCustomiseOpen((v) => !v); setExportMenuOpen(false); }}
+                className="h-8 px-3 bg-white border border-[#B4BCC2] hover:bg-[#F4F5F6] text-xs font-medium text-[#252B30] rounded-[2px]"
+              >
+                Customise view
+              </button>
+              {customiseOpen && (
+                <div className="absolute right-0 mt-1 w-56 bg-white border border-[#B4BCC2] shadow-lg p-3 z-20 space-y-2 text-xs">
+                  <div className="font-semibold text-[#252B30] pb-1 border-b border-[#D9DEE1]">Display Columns &amp; Privacy</div>
+                  <label className="flex items-center justify-between py-1 cursor-pointer">
+                    <span>Ledger balance column</span>
+                    <input type="checkbox" checked={showLedgerColumn} onChange={(e) => setShowLedgerColumn(e.target.checked)} className="accent-[#DB001B]" />
+                  </label>
+                  <label className="flex items-center justify-between py-1 cursor-pointer">
+                    <span>SWIFT / BIC column</span>
+                    <input type="checkbox" checked={showSwiftColumn} onChange={(e) => setShowSwiftColumn(e.target.checked)} className="accent-[#DB001B]" />
+                  </label>
+                  <label className="flex items-center justify-between py-1 cursor-pointer">
+                    <span>Show full account numbers</span>
+                    <input type="checkbox" checked={unmaskNumbers} onChange={(e) => setUnmaskNumbers(e.target.checked)} className="accent-[#DB001B]" />
+                  </label>
+                  <label className="flex items-center justify-between py-1 cursor-pointer">
+                    <span>Mask currency balances</span>
+                    <input type="checkbox" checked={hideBalances} onChange={(e) => setHideBalances(e.target.checked)} className="accent-[#DB001B]" />
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => { setCustomiseOpen(false); openFilterView(); }}
+                    className="w-full pt-1.5 border-t border-[#D9DEE1] text-left text-[#DB001B] font-medium hover:underline"
+                  >
+                    Manage favourites &amp; sort order →
+                  </button>
+                </div>
+              )}
+            </div>
+
+            <div className="relative">
+              <button
+                type="button"
+                onClick={() => { setExportMenuOpen((v) => !v); setCustomiseOpen(false); }}
+                className="h-8 px-3 bg-white border border-[#B4BCC2] hover:bg-[#F4F5F6] text-xs font-medium text-[#252B30] inline-flex items-center gap-1.5 rounded-[2px]"
+              >
+                <span>Export</span>
+                <ChevronDown className="w-3.5 h-3.5" aria-hidden="true" />
+              </button>
+              {exportMenuOpen && (
+                <div className="absolute right-0 mt-1 w-44 bg-white border border-[#B4BCC2] shadow-lg py-1 z-20 text-xs">
+                  <button type="button" onClick={() => exportAccounts('CSV')} className="w-full px-3 py-2 text-left hover:bg-[#F4F5F6]">Export CSV (.csv)</button>
+                  <button type="button" onClick={() => exportAccounts('MT940')} className="w-full px-3 py-2 text-left hover:bg-[#F4F5F6]">Export SWIFT MT940</button>
+                  <button type="button" onClick={() => exportAccounts('BAI2')} className="w-full px-3 py-2 text-left hover:bg-[#F4F5F6]">Export BAI2 Extract</button>
+                </div>
+              )}
+            </div>
+
             <button
               type="button"
               onClick={() => setHideBalances(!hideBalances)}
-              aria-label={hideBalances ? 'Show balances' : 'Hide balances'}
-              className="min-w-[40px] min-h-[40px] flex items-center justify-center text-white/90 hover:bg-white/10 rounded-[2px]"
+              title={hideBalances ? 'Show balances' : 'Mask balances'}
+              aria-label={hideBalances ? 'Show balances' : 'Mask balances'}
+              className="w-8 h-8 bg-white border border-[#B4BCC2] hover:bg-[#F4F5F6] flex items-center justify-center rounded-[2px] text-[#252B30]"
             >
-              {hideBalances ? <Eye className="w-4 h-4" /> : <EyeOff className="w-4 h-4" />}
+              {hideBalances ? <Lock className="w-3.5 h-3.5" /> : <Unlock className="w-3.5 h-3.5" />}
             </button>
+
             <button
               type="button"
               onClick={loadAccounts}
+              title="Refresh account balances"
               aria-label="Refresh accounts"
-              className="min-w-[40px] min-h-[40px] flex items-center justify-center text-white/90 hover:bg-white/10 rounded-[2px]"
+              className="w-8 h-8 bg-white border border-[#B4BCC2] hover:bg-[#F4F5F6] flex items-center justify-center rounded-[2px] text-[#252B30]"
             >
-              <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+              <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
             </button>
-            <button
-              type="button"
-              onClick={openFilterView}
-              aria-label="Filter, sort and favourites"
-              className="min-w-[40px] min-h-[40px] flex items-center justify-center text-white/90 hover:bg-white/10 rounded-[2px]"
-            >
-              <SlidersHorizontal className="w-4 h-4" />
-            </button>
-          </>
-        }
-      />
-
-      {/* Mobile Entity Selector + Consolidated Balance Strip */}
-      <div className="px-4 py-3 bg-[#F4F5F6] border-b border-[#D9DEE1] flex flex-wrap items-center justify-between gap-2 text-xs">
-        <div className="flex items-center gap-3 min-w-0">
-          {organisations.length > 1 && (
-            <select
-              aria-label="Switch corporate entity"
-              value={activeOrg?.id || ''}
-              onChange={(e) => switchOrganisation(e.target.value)}
-              className="md:hidden bg-white border border-[#B4BCC2] rounded-[2px] px-2 py-1 text-xs font-medium text-[#252B30] max-w-[200px]"
-            >
-              {organisations.map((o) => (
-                <option key={o.id} value={o.id}>{o.name}</option>
-              ))}
-            </select>
-          )}
-          <div>
-            <span className="text-[#68727A]">Total available ({baseCurrency}): </span>
-            <strong className="text-[#252B30] tabular-nums">
-              {totalAvailableBase === null
-                ? 'Not Available'
-                : formatFinancialCurrency(totalAvailableBase, baseCurrency, hideBalances)}
-            </strong>
           </div>
         </div>
-        <div className="text-[11px] text-[#68727A]">
-          {accounts.length} accounts • Updated {lastUpdated ? formatDateTime(lastUpdated) : 'now'}
-        </div>
+
+        {/* Collapsible Filter Drawer */}
+        {inlineFilterOpen && (
+          <div className="p-3.5 bg-[#F4F5F6] border-x border-b border-[#D9DEE1] grid grid-cols-1 sm:grid-cols-4 gap-3 text-xs">
+            <input
+              type="search"
+              placeholder="Search account title or number..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="h-9 px-3 bg-white border border-[#B4BCC2] rounded-[2px]"
+            />
+            <select
+              aria-label="Filter by location"
+              value={locationFilter}
+              onChange={(e) => setLocationFilter(e.target.value)}
+              className="h-9 px-2.5 bg-white border border-[#B4BCC2] rounded-[2px]"
+            >
+              <option value="ALL">All Locations</option>
+              {locations.map((l) => <option key={l} value={l}>{COUNTRY_NAMES[l] || l}</option>)}
+            </select>
+            <select
+              aria-label="Filter by currency"
+              value={currencyFilter}
+              onChange={(e) => setCurrencyFilter(e.target.value)}
+              className="h-9 px-2.5 bg-white border border-[#B4BCC2] rounded-[2px]"
+            >
+              <option value="ALL">All Currencies</option>
+              {currencies.map((c) => <option key={c} value={c}>{c}</option>)}
+            </select>
+            <div className="flex gap-2">
+              <Button size="sm" variant="outline" onClick={resetFilters} fullWidth>Reset</Button>
+              <Button size="sm" onClick={() => setInlineFilterOpen(false)} fullWidth>Done</Button>
+            </div>
+          </div>
+        )}
+
+        {error && (
+          <div className="mt-4">
+            <ErrorBanner message={error} onRetry={loadAccounts} />
+          </div>
+        )}
+
+        {/* Exact HSBCnet Grouped Data Table */}
+        {loading ? (
+          <SkeletonList rows={5} />
+        ) : groupedAccounts.length === 0 ? (
+          <EmptyState
+            title="No matching accounts"
+            description="Adjust your search or filters to view Coralgenz Global corporate accounts."
+            action={<Button size="sm" variant="outline" onClick={resetFilters}>Reset filters</Button>}
+          />
+        ) : (
+          <div
+            tabIndex={0}
+            role="region"
+            aria-label="Account information table"
+            className="mt-3 corporate-table-wrapper border border-[#D9DEE1]"
+          >
+            <table className="w-full min-w-[660px] text-left border-collapse text-xs">
+              <caption className="visually-hidden">Coralgenz Global Corporate Account Information</caption>
+              <thead>
+                <tr className="border-b border-[#C6CDD2]">
+                  <th scope="col" className="w-10 bg-[#E6EAED] py-2.5 px-3 text-center font-medium text-[#252B30]">
+                    <Star className="w-3.5 h-3.5 mx-auto text-[#252B30]" aria-hidden="true" />
+                    <span className="visually-hidden">Favourite</span>
+                  </th>
+                  <th
+                    scope="col"
+                    aria-sort={sortField === 'NUMBER' ? (sortDir === 'ASC' ? 'ascending' : 'descending') : undefined}
+                    className={`p-0 border-r border-[#C6CDD2] ${sortField === 'NUMBER' ? 'bg-[#2D373E] text-white' : 'bg-[#E6EAED] text-[#252B30]'}`}
+                  >
+                    <button
+                      type="button"
+                      onClick={() => handleHeaderSort('NUMBER')}
+                      className="w-full py-2.5 px-3 flex items-center justify-between gap-2 font-medium text-left"
+                    >
+                      <span>Account number</span>
+                      <span aria-hidden="true" className="text-[10px]">{sortField === 'NUMBER' ? (sortDir === 'ASC' ? '▲' : '▼') : '▾'}</span>
+                    </button>
+                  </th>
+                  <th
+                    scope="col"
+                    aria-sort={sortField === 'NAME' ? (sortDir === 'ASC' ? 'ascending' : 'descending') : undefined}
+                    className={`p-0 border-r border-[#C6CDD2] ${sortField === 'NAME' ? 'bg-[#2D373E] text-white' : 'bg-[#E6EAED] text-[#252B30]'}`}
+                  >
+                    <button
+                      type="button"
+                      onClick={() => handleHeaderSort('NAME')}
+                      className="w-full py-2.5 px-3 flex items-center justify-between gap-2 font-medium text-left"
+                    >
+                      <span>Account title</span>
+                      <span aria-hidden="true" className="text-[10px]">{sortField === 'NAME' ? (sortDir === 'ASC' ? '▲' : '▼') : '▾'}</span>
+                    </button>
+                  </th>
+                  {showSwiftColumn && (
+                    <th scope="col" className="bg-[#E6EAED] py-2.5 px-3 border-r border-[#C6CDD2] font-medium text-[#252B30]">
+                      SWIFT / Clearing
+                    </th>
+                  )}
+                  {showLedgerColumn && (
+                    <th scope="col" className="bg-[#E6EAED] py-2.5 px-3 border-r border-[#C6CDD2] text-right font-medium text-[#252B30]">
+                      Ledger balance
+                    </th>
+                  )}
+                  <th
+                    scope="col"
+                    aria-sort={sortField === 'BALANCE' ? (sortDir === 'ASC' ? 'ascending' : 'descending') : undefined}
+                    className={`p-0 border-r border-[#C6CDD2] ${sortField === 'BALANCE' ? 'bg-[#2D373E] text-white' : 'bg-[#E6EAED] text-[#252B30]'}`}
+                  >
+                    <button
+                      type="button"
+                      onClick={() => handleHeaderSort('BALANCE')}
+                      className="w-full py-2.5 px-3 flex items-center justify-end gap-2 font-medium text-right"
+                    >
+                      <span>Current available</span>
+                      <span aria-hidden="true" className="text-[10px]">{sortField === 'BALANCE' ? (sortDir === 'ASC' ? '▲' : '▼') : '▾'}</span>
+                    </button>
+                  </th>
+                  <th scope="col" className="bg-[#E6EAED] py-2.5 px-3 text-right font-medium text-[#252B30]">
+                    As at date/time
+                  </th>
+                </tr>
+              </thead>
+
+              <tbody className="divide-y divide-[#D9DEE1]">
+                {groupedAccounts.map(([groupLabel, list]) => {
+                  const isCollapsed = !!collapsedGroups[groupLabel];
+                  const colSpanCount = 5 + (showLedgerColumn ? 1 : 0) + (showSwiftColumn ? 1 : 0);
+                  const groupSubtotal = list.reduce((sum, item) => sum + (item.availableBalance || 0), 0);
+                  const groupCurrency = list[0]?.currency || baseCurrency;
+                  return (
+                    <React.Fragment key={groupLabel}>
+                      {/* Group Banner Row matching Image 1 & 2 */}
+                      <tr className="bg-[#EDF1F4]">
+                        <td colSpan={colSpanCount} className="p-0">
+                          <button
+                            type="button"
+                            aria-expanded={!isCollapsed}
+                            onClick={() => setCollapsedGroups((p) => ({ ...p, [groupLabel]: !p[groupLabel] }))}
+                            className="w-full py-2 px-3 flex items-center justify-between text-left font-semibold text-[#252B30] hover:bg-[#E4EAEE]"
+                          >
+                            <span>{groupLabel}</span>
+                            {isCollapsed ? <ChevronRight className="w-3.5 h-3.5 text-[#68727A]" /> : <ChevronDown className="w-3.5 h-3.5 text-[#68727A]" />}
+                          </button>
+                        </td>
+                      </tr>
+
+                      {!isCollapsed &&
+                        list.map((acc) => (
+                          <tr
+                            key={acc.id}
+                            onClick={() => loadAccountDetails(acc)}
+                            className="bg-white hover:bg-[#F4F5F6] cursor-pointer transition-colors"
+                          >
+                            <td className="py-3 px-3 text-center" onClick={(e) => e.stopPropagation()}>
+                              <button
+                                type="button"
+                                aria-label={acc.isFavourite ? `Unstar ${acc.account_name}` : `Star ${acc.account_name}`}
+                                onClick={(e) => toggleFavourite(acc, e)}
+                                className="p-1"
+                              >
+                                <Star className={`w-3.5 h-3.5 ${acc.isFavourite ? 'text-[#DB001B] fill-current' : 'text-[#B4BCC2]'}`} />
+                              </button>
+                            </td>
+                            <th scope="row" className="py-3 px-3 font-medium text-[#252B30] tabular-nums whitespace-nowrap">
+                              {unmaskNumbers ? acc.account_number : acc.maskedAccountNumber}
+                            </th>
+                            <td className="py-3 px-3 text-[#252B30]">
+                              <div className="font-medium">{acc.account_name}</div>
+                              <div className="text-[11px] text-[#68727A]">
+                                {acc.institution || acc.branch_name} • {acc.account_type.replace(/_/g, ' ')}
+                              </div>
+                            </td>
+                            {showSwiftColumn && (
+                              <td className="py-3 px-3 text-[#68727A] tabular-nums">{acc.ifsc_swift}</td>
+                            )}
+                            {showLedgerColumn && (
+                              <td className="py-3 px-3 text-right tabular-nums text-[#68727A]">
+                                {acc.ledgerBalance === null
+                                  ? 'Not Available'
+                                  : formatFinancialCurrency(acc.ledgerBalance, acc.currency, hideBalances)}
+                              </td>
+                            )}
+                            <td className="py-3 px-3 text-right font-semibold tabular-nums text-[#252B30]">
+                              {acc.availableBalance === null
+                                ? 'Not Available'
+                                : formatFinancialCurrency(acc.availableBalance, acc.currency, hideBalances)}
+                            </td>
+                            <td className="py-3 px-3 text-right text-[#68727A] tabular-nums whitespace-nowrap">
+                              {lastUpdated ? formatDateTime(lastUpdated) : '27 Nov 26 19:15 IST'}
+                            </td>
+                          </tr>
+                        ))}
+
+                      {/* Subtotal row matching Image 2 */}
+                      {!isCollapsed && showSubtotalRow && (
+                        <tr className="bg-[#FAFBFB] font-semibold text-[#252B30]">
+                          <td className="py-2.5 px-3" />
+                          <td className="py-2.5 px-3">Subtotal</td>
+                          <td className="py-2.5 px-3 text-[#68727A] font-normal">{list.length} account{list.length > 1 ? 's' : ''}</td>
+                          {showSwiftColumn && <td className="py-2.5 px-3" />}
+                          {showLedgerColumn && <td className="py-2.5 px-3" />}
+                          <td className="py-2.5 px-3 text-right tabular-nums">
+                            {formatFinancialCurrency(groupSubtotal, groupCurrency, hideBalances)}
+                          </td>
+                          <td className="py-2.5 px-3" />
+                        </tr>
+                      )}
+                    </React.Fragment>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
 
-      {/* Compact Search Bar */}
-      <search className="px-4 py-2.5 bg-white border-b border-[#D9DEE1] flex items-center gap-2">
-        <Search className="w-4 h-4 text-[#68727A] shrink-0" aria-hidden="true" />
-        <label htmlFor="accounts-search" className="visually-hidden">Search accounts</label>
-        <input
-          id="accounts-search"
-          type="search"
-          placeholder="Search account name, number, or currency"
-          value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
-          className="w-full py-1.5 text-sm text-[#252B30] placeholder:text-[#68727A]/70 focus:outline-none"
-        />
-      </search>
-
-      {error && (
-        <div className="p-4">
-          <ErrorBanner message={error} onRetry={loadAccounts} />
-        </div>
-      )}
-
-      {/* Optional Compact Favourites Section */}
-      {favourites.length > 0 && !searchQuery && currencyFilter === 'ALL' && (
-        <div>
-          <div className="px-4 py-2 bg-[#F4F5F6] border-b border-[#D9DEE1] flex items-center justify-between text-[11px] font-semibold uppercase tracking-wide text-[#68727A]">
-            <span>FAVOURITE ACCOUNTS</span>
-            <button type="button" onClick={() => { openFilterView(); setFilterTab('FAVOURITES'); }} className="text-[#263640] hover:underline normal-case font-medium">
-              Manage
-            </button>
+      {/* Articles Modal */}
+      <NativeDialog open={articlesModalOpen} onClose={() => setArticlesModalOpen(false)} title="HSBCnet Security & Operations Articles">
+        <div className="space-y-3 text-xs text-[#252B30]">
+          <div className="p-3 border border-[#D9DEE1] bg-[#F4F5F6]">
+            <div className="font-semibold">1. Business Email Compromise: a growing online security threat</div>
+            <p className="text-[#68727A] mt-1">Verify any beneficiary bank detail change out-of-band before initiating Priority Payments or SEPA transfers. Use Restricted Payment Templates for locked supplier disbursements.</p>
           </div>
-          {favourites.map((acc) => (
-            <BankingListRow
-              key={`fav-${acc.id}`}
-              title={acc.nickname || acc.account_name}
-              subtitle={`${acc.maskedAccountNumber} • ${acc.currency}`}
-              rightText={
-                acc.availableBalance === null
-                  ? 'Not Available'
-                  : formatFinancialCurrency(acc.availableBalance, acc.currency, hideBalances)
-              }
-              onClick={() => loadAccountDetails(acc)}
-            />
-          ))}
+          <div className="p-3 border border-[#D9DEE1] bg-[#F4F5F6]">
+            <div className="font-semibold">2. Security Devices &amp; Platform Passkeys</div>
+            <p className="text-[#68727A] mt-1">Keep a backup Mobile Security PIN or registered WebAuthn passkey active under Security Settings so Coralgenz Global sign-offs stay uninterrupted.</p>
+          </div>
         </div>
-      )}
+      </NativeDialog>
 
-      {/* Main Currency-Grouped Account List */}
-      {loading ? (
-        <SkeletonList rows={5} />
-      ) : groupedAccounts.length === 0 ? (
-        <EmptyState
-          title="No matching accounts"
-          description="Adjust your search or filters to view your organisation's corporate accounts."
-          action={
-            onNavigate ? (
-              <Button size="sm" variant="outline" onClick={resetFilters}>
-                Reset filters
-              </Button>
-            ) : undefined
-          }
-        />
-      ) : (
-        <div>
-          {groupedAccounts.map(([groupLabel, list]) => {
-            const isCollapsed = !!collapsedGroups[groupLabel];
-            return (
-              <div key={groupLabel}>
-                <button
-                  type="button"
-                  aria-expanded={!isCollapsed}
-                  onClick={() => setCollapsedGroups((p) => ({ ...p, [groupLabel]: !p[groupLabel] }))}
-                  className="w-full px-4 py-2 bg-[#F4F5F6] border-b border-[#D9DEE1] flex items-center justify-between text-left"
-                >
-                  <span className="text-[11px] font-semibold tracking-wide text-[#68727A] uppercase">
-                    {groupLabel}
-                  </span>
-                  {isCollapsed ? (
-                    <ChevronRight className="w-3.5 h-3.5 text-[#68727A]" />
-                  ) : (
-                    <ChevronDown className="w-3.5 h-3.5 text-[#68727A]" />
-                  )}
-                </button>
-
-                {!isCollapsed &&
-                  list.map((acc) => (
-                    <BankingListRow
-                      key={acc.id}
-                      title={acc.account_name}
-                      subtitle={`${acc.maskedAccountNumber}${acc.status !== 'ACTIVE' ? ` • ${acc.status}` : ''}`}
-                      rightText={
-                        acc.availableBalance === null
-                          ? 'Not Available'
-                          : formatFinancialCurrency(acc.availableBalance, acc.currency, hideBalances)
-                      }
-                      onClick={() => loadAccountDetails(acc)}
-                    />
-                  ))}
-              </div>
-            );
-          })}
+      {/* Tour Modal */}
+      <NativeDialog open={tourModalOpen} onClose={() => setTourModalOpen(false)} title="Coralgenz Global — HSBCnet Quick Tour">
+        <div className="space-y-2.5 text-xs text-[#252B30]">
+          <p><strong>≡ Menu Mega-Menu:</strong> Access Cash Management, Trade &amp; Supply Chain, Global Markets FX, HSBC Securities Services, and System Administration from the top bar.</p>
+          <p><strong>Tasks &amp; Authorisations:</strong> Review pending dual-authorisation wires and Trade Documentary Credits directly from Tasks in the upper-right bar.</p>
+          <p><strong>Account information:</strong> Click any account row for full transaction history, downloadable statements, SWIFT MT940 &amp; BAI2 exports.</p>
         </div>
-      )}
+      </NativeDialog>
     </div>
   );
 };

@@ -65,7 +65,7 @@ export function App() {
   const [userModalOpen, setUserModalOpen] = useState(false);
   const [newUser, setNewUser] = useState({
     username: '', email: '', phone: '+44 7700 909999', password: '', fullName: '',
-    role: 'PAYMENT_INITIATOR', organisationId: 'org-meridian-gb',
+    role: 'PAYMENT_INITIATOR', organisationId: 'org-meridian-in',
     permissions: [...ROLE_PERMISSION_DEFAULTS.PAYMENT_INITIATOR] as string[],
   });
 
@@ -73,7 +73,7 @@ export function App() {
 
   const [policyModalOpen, setPolicyModalOpen] = useState(false);
   const [newPolicy, setNewPolicy] = useState({
-    organisationId: 'org-meridian-gb', name: '', currency: 'ALL',
+    organisationId: 'org-meridian-in', name: '', currency: 'ALL',
     minAmount: '0', maxAmount: '50000', requiredApprovals: '2',
     makerCheckerEnforced: true, requireStepUpAuth: true,
   });
@@ -307,7 +307,7 @@ export function App() {
               <AdminBrandMark size={28} />
             </div>
             <div>
-              <h1 className="text-base font-bold text-[#14233C]">MeridianNet Enterprise Admin</h1>
+              <h1 className="text-base font-bold text-[#14233C]">Coralgenz Global — HSBCnet Admin</h1>
               <p className="text-xs text-[#6B7280]">Independent Administration &amp; Governance Console</p>
             </div>
           </div>
